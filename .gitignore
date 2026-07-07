@@ -16,3 +16,9 @@ frontend/*.tsbuildinfo
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent state
+workspace/.memory/
+workspace/.plans/
+workspace/.sessions/
+workspace/.tasks/

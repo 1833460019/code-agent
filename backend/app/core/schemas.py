@@ -57,6 +57,8 @@ class SessionSummary(BaseModel):
     session_id: str
     message_count: int
     todos: list[dict[str, str]]
+    title: str = "New session"
+    updated_at: float = 0
 
 
 class ModelResult(BaseModel):

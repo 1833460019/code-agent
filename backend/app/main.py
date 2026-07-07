@@ -33,7 +33,7 @@ async def health() -> dict[str, str]:
 @app.get("/api/sessions")
 async def list_sessions() -> list[SessionSummary]:
     return [
-        SessionSummary(session_id=session.session_id, message_count=len(session.messages), todos=session.todos)
+        SessionSummary(session_id=session.session_id, message_count=len(session.messages), todos=session.todos, title=session.title, updated_at=session.updated_at)
         for session in kernel.list_sessions()
     ]
 
@@ -60,4 +60,5 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         yield "event: close\ndata: {}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
 
