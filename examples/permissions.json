@@ -1,0 +1,8 @@
+[
+  {"tool": "shell", "command": "git push*", "action": "deny"},
+  {"tool": "shell", "command": "git reset --hard*", "action": "deny"},
+  {"tool": "shell", "command": "*", "action": "ask"},
+  {"tool": "mcp_*", "action": "ask"},
+  {"tool": "write_file", "action": "ask"},
+  {"tool": "edit_file", "action": "ask"}
+]

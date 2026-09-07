@@ -33,6 +33,7 @@ class AgentEvent(BaseModel):
         "compact",
         "error",
         "done",
+        "approval_required",
     ]
     content: str = ""
     session_id: str | None = None

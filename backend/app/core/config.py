@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     context_soft_limit_chars: int = Field(default=120_000, alias="CONTEXT_SOFT_LIMIT_CHARS")
     tool_output_limit_chars: int = Field(default=24_000, alias="TOOL_OUTPUT_LIMIT_CHARS")
     command_timeout_seconds: int = Field(default=60, alias="COMMAND_TIMEOUT_SECONDS")
+    permission_mode: str = Field(default="ask", alias="PERMISSION_MODE")
+    state_dir: Path | None = Field(default=None, alias="AGENT_STATE_DIR")
+    mcp_config_file: Path | None = Field(default=None, alias="MCP_CONFIG_FILE")
+    skill_roots: list[str] = Field(default_factory=list, alias="SKILL_ROOTS")
+    auto_memory: bool = Field(default=False, alias="AUTO_MEMORY")
+    cron_enabled: bool = Field(default=False, alias="CRON_ENABLED")
     workspace_dir: Path = Field(default=Path("../workspace"), alias="AGENT_WORKSPACE")
 
 

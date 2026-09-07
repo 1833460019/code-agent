@@ -13,7 +13,7 @@ import {
   User,
 } from '@lucide/vue'
 
-type EventType = 'session' | 'user' | 'assistant' | 'tool_start' | 'tool_result' | 'todo' | 'compact' | 'error' | 'done'
+type EventType = 'session' | 'user' | 'assistant' | 'tool_start' | 'tool_result' | 'todo' | 'compact' | 'error' | 'done' | 'approval_required'
 type MessageRole = 'user' | 'assistant' | 'assistant_tool_call' | 'tool_result' | 'context_summary'
 
 type AgentEvent = {
@@ -53,6 +53,7 @@ const timeline = ref<TimelineItem[]>([])
 const todos = ref<Array<{ content: string; status: string; activeForm?: string }>>([])
 const isRunning = ref(false)
 const statusText = ref('Ready')
+const answeredApprovals = ref<Record<string, boolean>>({})
 const errorText = ref('')
 const scroller = ref<HTMLElement | null>(null)
 
@@ -77,6 +78,7 @@ function addEvent(event: AgentEvent) {
 }
 
 function displayRole(type: EventType) {
+  if (type === 'approval_required') return 'permission'
   if (type === 'assistant') return 'assistant'
   if (type === 'user') return 'you'
   if (type === 'tool_start') return 'tool call'
@@ -85,6 +87,20 @@ function displayRole(type: EventType) {
   if (type === 'error') return 'error'
   if (type === 'todo') return 'todo'
   return type
+}
+
+async function answerApproval(item: TimelineItem, approved: boolean) {
+  const requestId = (item.data as { request_id?: string } | undefined)?.request_id
+  if (!requestId) return
+  try {
+    const response = await fetch(`${API_BASE}/api/approvals/${requestId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ approved }),
+    })
+    if (!response.ok) throw new Error(`Approval HTTP ${response.status}`)
+    answeredApprovals.value[item.id] = true
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : String(error)
+  }
 }
 
 function parseSseChunk(buffer: string) {
@@ -299,6 +315,11 @@ onMounted(() => {
               <code v-if="item.tool_name">{{ item.tool_name }}</code>
             </div>
             <pre v-if="item.type === 'tool_start'">{{ JSON.stringify(item.input ?? {}, null, 2) }}</pre>
+            <div v-else-if="item.type === 'approval_required'">
+              <pre>{{ JSON.stringify(item.input ?? {}, null, 2) }}</pre>
+              <button :disabled="answeredApprovals[item.id]" @click="answerApproval(item, true)">Allow once</button>
+              <button :disabled="answeredApprovals[item.id]" @click="answerApproval(item, false)">Deny</button>
+            </div>
             <p v-else>{{ item.content }}</p>
           </div>
         </article>

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
+
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -15,7 +19,20 @@ load_dotenv(override=True)
 settings = get_settings()
 kernel = AgentKernel(settings=settings, model=create_model_adapter(settings))
 
-app = FastAPI(title=settings.app_name)
+@asynccontextmanager
+async def lifespan(app):
+    stop = asyncio.Event()
+    worker = asyncio.create_task(kernel.serve_schedules(stop)) if settings.cron_enabled else None
+    try:
+        yield
+    finally:
+        stop.set()
+        if worker:
+            worker.cancel()
+            await asyncio.gather(worker, return_exceptions=True)
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
@@ -25,9 +42,28 @@ app.add_middleware(
 )
 
 
+class ApprovalResponse(BaseModel):
+    approved: bool
+
+
+@app.post("/api/approvals/{request_id}")
+async def resolve_approval(request_id: str, response: ApprovalResponse):
+    try:
+        kernel.resolve_approval(request_id, response.approved)
+    except KeyError as exc:
+        raise HTTPException(404, "Approval expired") from exc
+    return {"status": "answered"}
+
+
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "model": settings.model_id, "workspace": str(settings.workspace_dir)}
+
+
+@app.get("/api/schedules")
+async def list_schedules():
+    from repo_agent.scheduler import CronScheduler
+    return CronScheduler(kernel.state_dir / "services").list()
 
 
 @app.get("/api/sessions")

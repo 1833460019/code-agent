@@ -1,253 +1,201 @@
+"""Web session/SSE adapter. All execution is delegated to repo_agent.RepoAgent."""
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import Settings
-from .model import ModelAdapter
+from repo_agent import LocalEnvironment, RepoAgent, RepoAgentConfig
+from repo_agent.permissions import PermissionPolicy
+from repo_agent.schemas import Message, ToolCall
+from repo_agent.storage import atomic_json, identifier
+from repo_agent.scheduler import CronScheduler
+from repo_agent.hooks import Hooks
+
 from .schemas import AgentEvent, ChatMessage
-from .tools import ToolContext, create_tool_registry, drain_background_notifications
 
 
 @dataclass
 class AgentSession:
     session_id: str
     messages: list[ChatMessage] = field(default_factory=list)
-    todos: list[dict[str, str]] = field(default_factory=list)
+    todos: list[dict] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
     @property
-    def title(self) -> str:
-        first_user = next((message.content for message in self.messages if message.role == "user"), "")
-        return first_user.strip().replace("\n", " ")[:80] or "New session"
+    def title(self):
+        return next((m.content.replace("\n", " ")[:80] for m in self.messages if m.role == "user"), "New session")
 
-    def to_dict(self) -> dict:
-        return {
-            "session_id": self.session_id,
-            "messages": [message.model_dump() for message in self.messages],
-            "todos": self.todos,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "AgentSession":
-        return cls(
-            session_id=data["session_id"],
-            messages=[ChatMessage.model_validate(message) for message in data.get("messages", [])],
-            todos=data.get("todos", []),
-            created_at=float(data.get("created_at", time.time())),
-            updated_at=float(data.get("updated_at", time.time())),
-        )
+    def to_dict(self):
+        return dict(session_id=self.session_id, messages=[m.model_dump() for m in self.messages],
+                    todos=self.todos, created_at=self.created_at, updated_at=self.updated_at)
 
 
 class AgentKernel:
-    def __init__(self, settings: Settings, model: ModelAdapter):
-        self.settings = settings
-        self.model = model
-        self.tools = create_tool_registry()
-        self._tool_by_name = {tool.name: tool for tool in self.tools}
+    def __init__(self, settings, model):
+        self.settings, self.model = settings, model
         self.sessions: dict[str, AgentSession] = {}
-        self.sessions_dir = self.settings.workspace_dir / ".sessions"
+        self.state_dir = Path(settings.state_dir or Path(__file__).resolve().parents[3] / ".agent-state" / "web").resolve()
+        self.sessions_dir = self.state_dir / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self.approvals: dict[str, asyncio.Future] = {}
+        self._workspace_lock = asyncio.Lock()
         self._load_sessions()
 
-    def _session_path(self, session_id: str) -> Path:
-        return self.sessions_dir / f"{session_id}.json"
+    def _load_sessions(self):
+        # Import prior playground sessions once, preserving user conversations.
+        legacy = self.settings.workspace_dir / ".sessions"
+        for directory in (legacy, self.sessions_dir):
+            for path in directory.glob("*.json"):
+                try:
+                    data = json.loads(path.read_text(encoding="utf-8"))
+                    key = identifier(data["session_id"])
+                    self.sessions[key] = AgentSession(key,
+                        [ChatMessage.model_validate(m) for m in data.get("messages", [])],
+                        data.get("todos", []), data.get("created_at", time.time()), data.get("updated_at", time.time()))
+                except (ValueError, KeyError, OSError):
+                    continue
 
-    def _load_sessions(self) -> None:
-        for path in sorted(self.sessions_dir.glob("*.json")):
-            try:
-                session = AgentSession.from_dict(json.loads(path.read_text(encoding="utf-8")))
-            except Exception:
-                continue
-            self.sessions[session.session_id] = session
-
-    def _save_session(self, session: AgentSession) -> None:
+    def _save_session(self, session):
         session.updated_at = time.time()
-        self.sessions_dir.mkdir(parents=True, exist_ok=True)
-        self._session_path(session.session_id).write_text(
-            json.dumps(session.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        atomic_json(self.sessions_dir / f"{identifier(session.session_id)}.json", session.to_dict())
 
-    def create_session(self) -> AgentSession:
-        session = AgentSession(session_id=str(uuid.uuid4()))
-        self.sessions[session.session_id] = session
+    def get_session(self, session_id=None):
+        if session_id:
+            identifier(session_id)
+            if session_id in self.sessions:
+                return self.sessions[session_id]
+        key = uuid.uuid4().hex
+        session = AgentSession(key)
+        self.sessions[key] = session
         self._save_session(session)
         return session
 
-    def get_session(self, session_id: str | None) -> AgentSession:
-        if session_id and session_id in self.sessions:
-            return self.sessions[session_id]
-        if session_id:
-            path = self._session_path(session_id)
-            if path.exists():
-                session = AgentSession.from_dict(json.loads(path.read_text(encoding="utf-8")))
-                self.sessions[session.session_id] = session
-                return session
-        return self.create_session()
+    def list_sessions(self):
+        return sorted(self.sessions.values(), key=lambda s: s.updated_at, reverse=True)
 
-    def list_sessions(self) -> list[AgentSession]:
-        self._load_sessions()
-        return sorted(self.sessions.values(), key=lambda session: session.updated_at, reverse=True)
+    def resolve_approval(self, request_id, approved):
+        future = self.approvals.get(request_id)
+        if future is None or future.done():
+            raise KeyError("Approval expired or already answered")
+        future.set_result(approved)
 
-    async def run_turn(self, session_id: str | None, user_message: str) -> AsyncIterator[AgentEvent]:
+    async def run_turn(self, session_id, user_message):
         session = self.get_session(session_id)
         yield AgentEvent(type="session", session_id=session.session_id)
-
-        session.messages.append(ChatMessage(role="user", content=user_message))
-        self._inject_memory_context(session)
-        self._save_session(session)
+        queue: asyncio.Queue = asyncio.Queue()
         yield AgentEvent(type="user", session_id=session.session_id, content=user_message)
 
-        rounds_without_todo = 0
-        for _step in range(self.settings.max_agent_steps):
-            compacted = self._compact_if_needed(session)
-            if compacted:
-                self._save_session(session)
-                yield AgentEvent(
-                    type="compact",
-                    session_id=session.session_id,
-                    content=compacted.content,
-                    data={"message_count": len(session.messages)},
-                )
-
-            notes = drain_background_notifications()
-            if notes:
-                content = "<background-results>\n" + "\n\n".join(notes) + "\n</background-results>"
-                session.messages.append(ChatMessage(role="user", content=content))
-                self._save_session(session)
-                yield AgentEvent(type="tool_result", session_id=session.session_id, tool_name="background", content=content)
-
+        async def approve(name, arguments):
+            key = uuid.uuid4().hex
+            future = asyncio.get_running_loop().create_future()
+            self.approvals[key] = future
+            queue.put_nowait(AgentEvent(type="approval_required", session_id=session.session_id,
+                tool_name=name, input=arguments, content="Tool permission required", data={"request_id": key}))
             try:
-                result = await self.model.next(session.messages, self.tools)
+                return await asyncio.wait_for(future, 180)
+            except TimeoutError:
+                return False
+            finally:
+                self.approvals.pop(key, None)
+
+        def on_event(event):
+            kind = event["type"]
+            if kind not in {"assistant", "tool_start", "tool_result", "todo", "compact", "error"}:
+                return
+            message = AgentEvent(type=kind, session_id=session.session_id,
+                content=str(event.get("content", event.get("model_observation", event.get("observation", event.get("error", ""))))),
+                tool_name=event.get("tool_name"), tool_call_id=event.get("tool_call_id"),
+                input=event.get("arguments"), is_error=not event.get("ok", True), data=event.get("data"))
+            if kind == "assistant":
+                session.messages.append(ChatMessage(role="assistant", content=message.content))
+            elif kind == "tool_start":
+                session.messages.append(ChatMessage(role="assistant_tool_call", content=json.dumps(message.input),
+                    tool_name=message.tool_name, tool_call_id=message.tool_call_id))
+            elif kind == "tool_result":
+                session.messages.append(ChatMessage(role="tool_result", content=message.content,
+                    tool_name=message.tool_name, tool_call_id=message.tool_call_id, is_error=message.is_error))
+            elif kind == "todo":
+                session.todos = event["data"]
+            self._save_session(session)
+            queue.put_nowait(message)
+
+        async def produce():
+            try:
+                async with self._workspace_lock:
+                    history = _to_runtime(session.messages)
+                    session.messages.append(ChatMessage(role="user", content=user_message))
+                    self._save_session(session)
+                    config = self.runtime_config()
+                    hooks = Hooks()
+                    hooks.register("user_prompt", lambda p: p["runtime"].todos.update(session.todos))
+                    agent = RepoAgent(model=self.model, environment=LocalEnvironment(self.settings.workspace_dir,
+                        command_timeout=self.settings.command_timeout_seconds), config=config, hooks=hooks,
+                        policy=PermissionPolicy(self.settings.permission_mode, approver=approve))
+                    result = await agent.run(user_message, instance_id=session.session_id, history=history, event_callback=on_event)
+                    queue.put_nowait(AgentEvent(type="done", session_id=session.session_id, data=result.to_dict()))
             except Exception as exc:
-                message = f"{type(exc).__name__}: {exc}"
-                session.messages.append(ChatMessage(role="assistant", content=message, is_error=True))
-                self._save_session(session)
-                yield AgentEvent(type="error", session_id=session.session_id, content=message, is_error=True)
-                yield AgentEvent(type="done", session_id=session.session_id)
-                return
-
-            if result.assistant_text:
-                session.messages.append(ChatMessage(role="assistant", content=result.assistant_text))
-                self._save_session(session)
-                yield AgentEvent(type="assistant", session_id=session.session_id, content=result.assistant_text)
-
-            if not result.tool_calls:
-                yield AgentEvent(type="done", session_id=session.session_id)
-                return
-
-            used_todo = False
-            for call in result.tool_calls:
-                session.messages.append(
-                    ChatMessage(
-                        role="assistant_tool_call",
-                        content=json.dumps(call.input, ensure_ascii=False),
-                        tool_call_id=call.id,
-                        tool_name=call.name,
-                    )
-                )
-                self._save_session(session)
-                yield AgentEvent(
-                    type="tool_start",
-                    session_id=session.session_id,
-                    tool_name=call.name,
-                    tool_call_id=call.id,
-                    input=call.input,
-                )
-
-                tool_result = self._execute_tool(call.name, call.input, session)
-                session.messages.append(
-                    ChatMessage(
-                        role="tool_result",
-                        content=tool_result.output,
-                        tool_call_id=call.id,
-                        tool_name=call.name,
-                        is_error=not tool_result.ok,
-                    )
-                )
-                self._save_session(session)
-                yield AgentEvent(
-                    type="tool_result",
-                    session_id=session.session_id,
-                    tool_name=call.name,
-                    tool_call_id=call.id,
-                    content=tool_result.output,
-                    is_error=not tool_result.ok,
-                    data=tool_result.data,
-                )
-
-                if call.name == "TodoWrite":
-                    used_todo = True
-                    self._save_session(session)
-                    yield AgentEvent(type="todo", session_id=session.session_id, content="Todo list updated.", data=session.todos)
-
-                if call.name == "compact" and tool_result.ok:
-                    summary = self._compact(session, focus=str(call.input.get("focus", "")))
-                    self._save_session(session)
-                    yield AgentEvent(type="compact", session_id=session.session_id, content=summary.content, data={"message_count": len(session.messages)})
-
-            rounds_without_todo = 0 if used_todo else rounds_without_todo + 1
-            if session.todos and rounds_without_todo >= 3:
-                session.messages.append(ChatMessage(role="user", content="<reminder>Update your todos.</reminder>"))
-                self._save_session(session)
-                rounds_without_todo = 0
-
-        message = "Reached the maximum agent step limit for this turn."
-        session.messages.append(ChatMessage(role="assistant", content=message))
-        self._save_session(session)
-        yield AgentEvent(type="assistant", session_id=session.session_id, content=message)
-        yield AgentEvent(type="done", session_id=session.session_id)
-
-    def _inject_memory_context(self, session: AgentSession) -> None:
-        memory_path = self.settings.workspace_dir / ".memory" / "MEMORY.md"
-        if not memory_path.exists():
-            return
+                queue.put_nowait(AgentEvent(type="error", content=str(exc), is_error=True))
+            finally:
+                queue.put_nowait(None)
+        producer = asyncio.create_task(produce())
         try:
-            memory = memory_path.read_text(encoding="utf-8")[-6000:]
-        except OSError:
-            return
-        if memory.strip():
-            session.messages.append(ChatMessage(role="user", content=f"<memory>\n{memory}\n</memory>"))
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                yield event
+        finally:
+            if not producer.done():
+                producer.cancel()
+            await asyncio.gather(producer, return_exceptions=True)
 
-    def _execute_tool(self, name: str, input_data: dict, session: AgentSession):
-        tool = self._tool_by_name.get(name)
-        if not tool:
-            from .tools import ToolResult
+    def runtime_config(self):
+        mcp = json.loads(self.settings.mcp_config_file.read_text(encoding="utf-8")) if self.settings.mcp_config_file else {}
+        return RepoAgentConfig(profile="full", max_steps=self.settings.max_agent_steps,
+            runs_dir=self.state_dir / "runs", state_dir=self.state_dir / "services",
+            require_git=False, permission_mode=self.settings.permission_mode,
+            context_soft_limit_chars=self.settings.context_soft_limit_chars,
+            tool_output_limit_chars=self.settings.tool_output_limit_chars,
+            skill_roots=self.settings.skill_roots, mcp_config=mcp, auto_memory=self.settings.auto_memory)
 
-            return ToolResult(ok=False, output=f"Unknown tool: {name}")
-        context = ToolContext(workspace=self.settings.workspace_dir, settings=self.settings, todos=session.todos)
-        return tool.handler(input_data, context)
+    async def serve_schedules(self, stop):
+        scheduler = CronScheduler(self.state_dir / "services")
+        async def consume(entry):
+            async with self._workspace_lock:
+                # There is no live approval UI for unattended jobs. Ask policies fail closed;
+                # trusted execution must be explicitly configured by the operator.
+                agent = RepoAgent(model=self.model, environment=LocalEnvironment(self.settings.workspace_dir,
+                    command_timeout=self.settings.command_timeout_seconds), config=self.runtime_config())
+                result = await agent.run(entry["prompt"], instance_id="cron-" + entry["id"])
+                return result.to_dict()
+        await scheduler.serve(consume, stop)
 
-    def _estimate_context_chars(self, session: AgentSession) -> int:
-        return sum(len(message.content) + 80 for message in session.messages)
 
-    def _compact_if_needed(self, session: AgentSession) -> ChatMessage | None:
-        if self._estimate_context_chars(session) <= self.settings.context_soft_limit_chars:
-            return None
-        return self._compact(session)
-
-    def _compact(self, session: AgentSession, focus: str = "") -> ChatMessage:
-        if len(session.messages) <= 16:
-            summary = ChatMessage(role="context_summary", content="Context is already short.")
-            session.messages.insert(0, summary)
-            return summary
-
-        keep_recent = session.messages[-12:]
-        older = session.messages[:-12]
-        lines = ["Earlier conversation was compacted.", f"Compressed messages: {len(older)}"]
-        if focus:
-            lines.append(f"Focus: {focus}")
-        for message in older[-20:]:
-            detail = f" ({message.tool_name})" if message.tool_name else ""
-            lines.append(f"- {message.role}{detail}: {message.content[:500]}")
-        summary = ChatMessage(role="context_summary", content="\n".join(lines))
-        session.messages = [summary, *keep_recent]
-        return summary
+def _to_runtime(messages):
+    result = []
+    for message in messages:
+        if message.role == "assistant_tool_call":
+            if not result or result[-1].role != "assistant":
+                result.append(Message(role="assistant"))
+            # Historical Web logs interleaved calls/results; each remains a valid turn.
+            result[-1].tool_calls.append(ToolCall(message.tool_call_id, message.tool_name, json.loads(message.content)))
+        elif message.role == "tool_result":
+            result.append(Message(role="tool", content=message.content, tool_call_id=message.tool_call_id,
+                                  tool_name=message.tool_name, is_error=message.is_error))
+        else:
+            result.append(Message(role="summary" if message.role == "context_summary" else message.role, content=message.content))
+    # Discard an incomplete last tool turn left by interruption before continuing.
+    outstanding = set()
+    safe_end = 0
+    for index, message in enumerate(result):
+        outstanding.update(c.id for c in message.tool_calls)
+        if message.role == "tool":
+            outstanding.discard(message.tool_call_id)
+        if not outstanding:
+            safe_end = index + 1
+    return result[:safe_end]

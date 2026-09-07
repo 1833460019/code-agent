@@ -1,5 +1,8 @@
 # Python
 backend/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
 backend/__pycache__/
 backend/app/**/__pycache__/
 backend/*.log
@@ -22,3 +25,12 @@ workspace/.memory/
 workspace/.plans/
 workspace/.sessions/
 workspace/.tasks/
+
+# Baseline agent experiment outputs
+runs/
+tests/.work/
+.agent-state/
+.venv/
+.env
+.env.*
+!.env.example
