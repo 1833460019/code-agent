@@ -115,10 +115,10 @@ python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 18002
 ```powershell
 cd frontend
 npm install
-npm run dev -- --host 127.0.0.1 --port 5174
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-打开 `http://127.0.0.1:5174`。聊天中会显示工具审批卡片，点击允许一次或拒绝；流断开时会取消运行并保留轨迹。不同 Web 会话的工作区写入按回合串行化，避免直接并发修改主工作区。
+打开 `http://127.0.0.1:5173`。开发服务器默认把 `/api` 代理到 `http://127.0.0.1:18002`；可用前端环境变量 `AGENT_API_TARGET` 改代理目标，或在前后端不同域部署时通过 `VITE_API_BASE` 设置公开后端地址。聊天中会显示工具审批卡片，点击允许一次或拒绝；流断开时会取消运行并保留轨迹。不同 Web 会话的工作区写入按回合串行化，避免直接并发修改主工作区。
 
 Web 环境变量除模型配置外还包括 `PERMISSION_MODE`（默认 ask）、`AGENT_STATE_DIR`、`MCP_CONFIG_FILE`、`SKILL_ROOTS`（JSON 字符串数组）、`AUTO_MEMORY` 和 `CRON_ENABLED`（默认 false）。定时任务结果可从 `GET /api/schedules` 和轨迹查看；无人值守任务没有交互审批渠道，ask 策略会拒绝需要批准的工具，不会自动提权。服务仅适合可信本地使用，尚无登录鉴权，不应直接公开到公网。
 

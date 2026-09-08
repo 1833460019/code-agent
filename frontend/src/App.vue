@@ -64,7 +64,7 @@ type RunDetail = {
 
 type TimelineItem = AgentEvent & { id: string; ts: number }
 
-const API_BASE = 'http://127.0.0.1:18002'
+const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 const input = ref('')
 const sessionId = ref<string | null>(null)
 const sessions = ref<SessionSummary[]>([])
@@ -304,7 +304,7 @@ onMounted(() => {
           @click="loadSession(session.session_id)"
         >
           <span>{{ session.title }}</span>
-          <small>{{ session.message_count }} msgs 璺?{{ formatTime(session.updated_at) }}</small>
+          <small>{{ session.message_count }} msgs · {{ formatTime(session.updated_at) }}</small>
         </button>
         <div v-if="sessions.length === 0" class="empty">No saved sessions</div>
       </section>
