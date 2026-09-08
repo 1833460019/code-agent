@@ -36,6 +36,16 @@ class WorkspacePool:
             if not target.exists():
                 self._git(self.tasks, "clone", "--no-checkout", str(mirror), target.name)
                 self._git(target, "checkout", "--detach", task.base_commit)
+            else:
+                resolved_target = target.resolve()
+                if not resolved_target.is_relative_to(self.tasks):
+                    raise RuntimeError(f"Benchmark workspace escaped task root: {resolved_target}")
+                # Task directories are disposable, isolated checkouts. A crashed or failed
+                # attempt may leave source edits and reproduction files behind; reset them
+                # before retrying so every attempt starts from the official base commit.
+                self._git(target, "reset", "--hard", task.base_commit)
+                self._git(target, "clean", "-fd")
+                self._git(target, "checkout", "--detach", task.base_commit)
             head = self._git(target, "rev-parse", "HEAD").stdout.strip()
             expected = self._git(target, "rev-parse", task.base_commit).stdout.strip()
             dirty = self._git(target, "status", "--porcelain").stdout.strip()
@@ -71,7 +81,7 @@ class BatchStore:
         self.lock = threading.Lock()
 
     def completed(self, instance_id: str) -> bool:
-        return self.data["tasks"].get(instance_id, {}).get("state") == "completed"
+        return _is_successful(self.data["tasks"].get(instance_id, {}))
 
     def update(self, instance_id: str, **values) -> None:
         with self.lock:
@@ -84,7 +94,7 @@ class BatchStore:
         predictions = [
             value["prediction"]
             for value in self.data["tasks"].values()
-            if value.get("state") == "completed" and value.get("prediction")
+            if _is_successful(value)
         ]
         temporary = self.root / "predictions.jsonl.tmp"
         temporary.write_text(
@@ -96,3 +106,12 @@ class BatchStore:
 
 def _safe_name(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._") or "task"
+
+
+def _is_successful(value: dict) -> bool:
+    prediction = value.get("prediction") or {}
+    return (
+        value.get("state") == "completed"
+        and value.get("status") == "success"
+        and bool(str(prediction.get("model_patch", "")).strip())
+    )

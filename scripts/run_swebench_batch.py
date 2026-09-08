@@ -94,9 +94,10 @@ async def async_main(args: argparse.Namespace) -> int:
                 adapter = SWEbenchAdapter(environment)
                 result = await adapter.run(task, agent)
                 prediction = adapter.prediction(result)
+                succeeded = result.status == "success" and bool(result.model_patch.strip())
                 store.update(
                     task.instance_id,
-                    state="completed",
+                    state="completed" if succeeded else "failed",
                     status=result.status,
                     termination_reason=result.termination_reason,
                     total_tokens=result.total_tokens,
@@ -115,7 +116,8 @@ async def async_main(args: argparse.Namespace) -> int:
 
     await asyncio.gather(*(run_one(task) for task in tasks))
     failures = sum(
-        store.data["tasks"].get(task.instance_id, {}).get("state") == "error" for task in tasks
+        store.data["tasks"].get(task.instance_id, {}).get("state") in {"error", "failed"}
+        for task in tasks
     )
     print(json.dumps({"selected": len(tasks), "errors": failures}, ensure_ascii=False))
     return 1 if failures else 0
