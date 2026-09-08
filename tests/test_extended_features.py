@@ -38,6 +38,8 @@ class ExtendedFeaturesTests(WorkspaceCase):
         self.assertIn("UNIQUE_SKILL_BODY", model.requests[2]["messages"][-1].content)
         self.assertIn("Use Python", model.requests[-1]["system_prompt"])
         self.assertIn("Verify code", model.requests[-1]["system_prompt"])
+        self.assertIn("Shell command syntax:", model.requests[0]["system_prompt"])
+        self.assertIn("already starts in the workspace root", model.requests[0]["system_prompt"])
         self.assertEqual(seen[0], "user_prompt")
         self.assertEqual(seen[-1], "stop")
         self.assertEqual(seen.count("before_tool"), 7)

@@ -14,8 +14,18 @@ class PromptBuilder:
         self._cache: dict[str, str] = {}
 
     def build(self, runtime, step: int) -> str:
+        if os.name == "nt":
+            shell_contract = (
+                "Windows cmd.exe. Use cmd syntax; do not use POSIX-only commands such as head, "
+                "pwd, or /workspace paths."
+            )
+        else:
+            shell_contract = "POSIX /bin/sh. Use portable POSIX shell syntax."
         sections = [self.base, f"Workspace: {runtime.environment.workspace}\n"
-                    f"Shell platform: {os.name}\nProfile: {runtime.config.profile}\n"
+                    f"Shell command syntax: {shell_contract}\n"
+                    "Every shell command already starts in the workspace root. Prefer the tool's cwd "
+                    "argument for a subdirectory instead of changing to an absolute path.\n"
+                    f"Profile: {runtime.config.profile}\n"
                     f"Agent: {runtime.name}\nPermission mode: {runtime.policy.mode}"]
         if runtime.config.profile == "full":
             sections.append("Use the available capabilities when helpful. Maintain todos for multi-step work. "
