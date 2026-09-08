@@ -34,6 +34,8 @@ python scripts/run_agent.py --workspace /path/to/repo --task "Fix the bug" --mod
 
 每次 `finish` 尝试都会写入 `verification.json`，记录 diff 哈希、命令退出码和有界输出；验证失败时 Agent 会继续修复，而不是把口头完成当作成功。
 
+运行过程在每个工具边界写入 SQLite checkpoint，并用可续期 lease 防止同一个实例被重复执行；进程中断后可用相同的 `--instance-id` 加 `--resume` 从下一步继续。
+
 SWE-bench Lite dev 可批量抓取并断点续跑（先用 `--limit 1` 控制费用）：
 
 ```bash

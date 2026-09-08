@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 from ..environment.base import Environment
+from ..checkpoint import CheckpointStore
 from ..features import Features
 from ..hooks import Hooks
 from ..logging.trajectory import TrajectoryRecorder
@@ -15,7 +17,7 @@ from ..models.base import Model
 from ..permissions import PermissionPolicy
 from ..prompts import load_coding_agent_prompt
 from ..runtime import Runtime
-from ..schemas import AgentRunResult, Message
+from ..schemas import AgentRunResult, Message, ToolCall
 from ..verification import VerificationPolicy
 from .loop import AgentLoop
 from .state import AgentState
@@ -43,6 +45,9 @@ class RepoAgentConfig:
     mcp_config: dict = field(default_factory=dict)
     require_git: bool = True
     verification: VerificationPolicy = field(default_factory=VerificationPolicy)
+    checkpoint_enabled: bool = True
+    resume: bool = False
+    checkpoint_lease_seconds: float = 300
 
 
 class RepoAgent:
@@ -58,6 +63,9 @@ class RepoAgent:
         self.state_root = Path(self.config.state_dir or Path(self.config.runs_dir).resolve().parent / ".agent-state" / key).resolve()
         self.last_messages: list[Message] = []
         self.last_runtime: Runtime | None = None
+        self.checkpoint_store: CheckpointStore | None = None
+        self.checkpoint_run_id = ""
+        self.checkpoint_owner = ""
 
     async def run(self, problem_statement: str, *, instance_id: str = "manual",
                   event_callback: Callable[[dict[str, Any]], None] | None = None,
@@ -70,9 +78,24 @@ class RepoAgent:
                self.config.tool_output_limit_chars) <= 0:
             raise ValueError("Time and context budgets must be positive")
         self.config.verification.validate()
+        if self.config.checkpoint_lease_seconds <= 0:
+            raise ValueError("checkpoint_lease_seconds must be positive")
         for path in (Path(self.config.runs_dir).expanduser().resolve(), self.state_root):
             if path.is_relative_to(self.environment.workspace):
                 raise ValueError("runs_dir and state_dir must be outside the target workspace")
+        restored = None
+        if self.config.checkpoint_enabled and parent_runtime is None:
+            self.checkpoint_store = CheckpointStore(self.state_root / "run-checkpoints.sqlite3")
+            self.checkpoint_run_id = instance_id
+            self.checkpoint_owner = uuid.uuid4().hex
+            restored = self.checkpoint_store.acquire(
+                instance_id,
+                self.checkpoint_owner,
+                resume=self.config.resume,
+                lease_seconds=self.config.checkpoint_lease_seconds,
+            )
+            if restored and restored.get("problem_statement") != problem_statement:
+                raise ValueError("Checkpoint problem statement does not match this run")
         public_config = asdict(self.config)
         public_config["mcp_config"] = {"servers": list(self.config.mcp_config.get("mcpServers", {}))}
         public_config.update(workspace=str(self.environment.workspace),
@@ -82,7 +105,9 @@ class RepoAgent:
                                      problem_statement=problem_statement, event_callback=event_callback, config=public_config)
         runtime = Runtime(self, recorder, problem_statement, name=name, parent=parent_runtime)
         self.last_runtime = runtime
-        state = AgentState(messages=[*(history or []), Message(role="user", content=problem_statement)])
+        state = _restore_state(restored) if restored else AgentState(
+            messages=[*(history or []), Message(role="user", content=problem_statement)]
+        )
         started = time.perf_counter()
         status, reason, error, patch = "error", "initialization_error", None, ""
         cancelled = False
@@ -138,6 +163,23 @@ class RepoAgent:
                 await self.hooks.emit("stop", {"runtime": runtime, "result": result})
             except Exception as exc:
                 recorder.event("stop_hook_error", error=str(exc))
+            if self.checkpoint_store:
+                self.checkpoint_store.complete(instance_id, self.checkpoint_owner, status)
         if cancelled:
             raise asyncio.CancelledError
         return result
+
+
+def _restore_state(data: dict) -> AgentState:
+    messages = []
+    for item in data.get("messages", []):
+        item = dict(item)
+        item["tool_calls"] = [ToolCall(**call) for call in item.get("tool_calls", [])]
+        messages.append(Message(**item))
+    return AgentState(
+        messages=messages,
+        step=int(data.get("step", 0)),
+        total_tool_calls=int(data.get("total_tool_calls", 0)),
+        input_tokens=int(data.get("input_tokens", 0)),
+        output_tokens=int(data.get("output_tokens", 0)),
+    )

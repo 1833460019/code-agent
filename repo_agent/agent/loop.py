@@ -20,7 +20,7 @@ class AgentLoop:
     async def run(self, state):
         rt, rec = self.runtime, self.runtime.recorder
         messages = state.messages
-        for step in range(1, rt.config.max_steps + 1):
+        for step in range(state.step + 1, rt.config.max_steps + 1):
             await asyncio.sleep(0)
             state.step = step
             stop = await rt.before_step(state)
@@ -63,6 +63,7 @@ class AgentLoop:
             rec.event("assistant", step=step, content=response.content, response=asdict(response), latency=latency)
             if not response.tool_calls:
                 rec.add_step(record)
+                rt.save_checkpoint(state)
                 if rt.background.pending or (not rt.parent and rt.teams.pending):
                     messages.append(Message(role="user", content="Required work is still running. Use wait tools to collect results."))
                     continue
@@ -92,6 +93,7 @@ class AgentLoop:
                     rec.event("todo", step=step, data=rt.todos.items)
                 finished = finished or (result.finished and result.ok)
             rec.add_step(record)
+            rt.save_checkpoint(state)
             if finished:
                 return "success", "finish_tool", None
         return "terminated", "max_steps", None

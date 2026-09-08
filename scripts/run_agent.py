@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Command that must pass before finish; repeatable",
     )
     parser.add_argument("--verification-timeout", type=float, default=300)
+    parser.add_argument("--resume", action="store_true", help="Resume this instance from its latest checkpoint")
     return parser
 
 
@@ -113,7 +114,7 @@ async def async_main(args: argparse.Namespace) -> int:
                                    commands=args.verify_command,
                                    command_timeout=args.verification_timeout,
                                    require_todos_complete=args.require_todos_complete,
-                               )),
+                               ), resume=args.resume),
     )
     result = await agent.run(args.task, instance_id=args.instance_id, event_callback=console_event)
     print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))

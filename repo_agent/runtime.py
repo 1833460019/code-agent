@@ -62,6 +62,23 @@ class Runtime:
         for tool in self.tools:
             Draft202012Validator.check_schema(tool.input_schema)
 
+    def save_checkpoint(self, state) -> None:
+        if self.parent or not self.agent.checkpoint_store:
+            return
+        self.agent.checkpoint_store.save(
+            self.agent.checkpoint_run_id,
+            self.agent.checkpoint_owner,
+            {
+                "problem_statement": self.problem,
+                "messages": [asdict(message) for message in state.messages],
+                "step": state.step,
+                "total_tool_calls": state.total_tool_calls,
+                "input_tokens": state.input_tokens,
+                "output_tokens": state.output_tokens,
+            },
+            lease_seconds=self.config.checkpoint_lease_seconds,
+        )
+
     async def dispatch(self, name, arguments):
         tool = self.by_name.get(name)
         if tool is None:

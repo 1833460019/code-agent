@@ -57,6 +57,29 @@ class RuntimeCoreTests(WorkspaceCase):
         self.assertEqual(result["termination_reason"], "cancelled")
         self.assertIn("partial.txt", result["model_patch"])
 
+    def test_interrupted_run_resumes_from_sqlite_checkpoint(self):
+        class Waiting(SequenceModel):
+            async def complete(self, **kwargs):
+                if self.requests:
+                    raise asyncio.CancelledError
+                return await super().complete(**kwargs)
+
+        first = self.agent(
+            Waiting([call("write_file", path="resume.txt", content="checkpointed")]),
+            checkpoint_lease_seconds=30,
+        )
+        with self.assertRaises(asyncio.CancelledError):
+            asyncio.run(first.run("Resume me", instance_id="resume-case"))
+        second = self.agent(
+            SequenceModel([call("finish", summary="resumed")]),
+            resume=True,
+            checkpoint_lease_seconds=30,
+        )
+        result = asyncio.run(second.run("Resume me", instance_id="resume-case"))
+        self.assertEqual(result.status, "success")
+        self.assertEqual(result.total_steps, 2)
+        self.assertTrue((self.root / "state" / "run-checkpoints.sqlite3").is_file())
+
     def test_hooks_and_permission_denial_prevent_edits(self):
         model = SequenceModel([call("write_file", path="denied.txt", content="bad"), call("finish", summary="blocked")])
         agent = self.agent(model)
