@@ -139,7 +139,15 @@ Web 环境变量除模型配置外还包括 `PERMISSION_MODE`（默认 ask）、
 python scripts/run_swebench.py --task-file tasks.json --instance-id project__project-123 --workspace C:/repos/task-123 --model YOUR_MODEL_ID
 ```
 
-输出 `prediction.json`：`instance_id / model_name_or_path / model_patch`，可作为官方 evaluator 的预测输入。Adapter 只验证 checkout、调用同一 Agent 并导出预测；不会自动下载数据集、批量准备 23 个环境、安装目标依赖、启动官方容器评测或计算 resolved rate。
+单任务输出 `prediction.json`；批量模式会下载任务清单、准备 23 个隔离 checkout，并增量生成官方格式 `predictions.jsonl`。目标依赖安装、官方容器 evaluator 和 resolved rate 仍由 SWE-bench harness 负责，项目不会把“生成了 patch”误报为 resolved。
+
+运行结果可按失败类型、patch rate、token 和时延汇总；两组同实例实验会给出固定随机种子的配对 bootstrap 95% CI：
+
+```bash
+python scripts/summarize_runs.py ../baseline-results --compare ../full-results
+```
+
+`configs/ablation/baseline.json` 与 `configs/ablation/full.json` 固定两套实验口径。
 
 ## 轨迹与结果
 

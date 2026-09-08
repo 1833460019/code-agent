@@ -1,0 +1,19 @@
+{
+  "name": "full",
+  "profile": "full",
+  "features": [
+    "todo",
+    "skills",
+    "memory",
+    "tasks",
+    "background",
+    "cron",
+    "subagents",
+    "teams",
+    "worktrees",
+    "mcp"
+  ],
+  "max_steps": 50,
+  "max_tokens": 4096,
+  "require_patch": true
+}

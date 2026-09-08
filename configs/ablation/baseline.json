@@ -1,0 +1,8 @@
+{
+  "name": "baseline",
+  "profile": "baseline",
+  "features": [],
+  "max_steps": 50,
+  "max_tokens": 4096,
+  "require_patch": true
+}

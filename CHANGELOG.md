@@ -8,6 +8,7 @@
 - Add configurable finish gates with durable patch and command evidence.
 - Add a resumable SWE-bench batch runner with isolated checkouts and predictions JSONL.
 - Add SQLite run checkpoints, single-writer leases, and CLI resume support.
+- Add failure taxonomy, cost/latency summaries, paired bootstrap confidence intervals, and ablation manifests.
 
 ## 0.2.0 - 2026-09-07
 
