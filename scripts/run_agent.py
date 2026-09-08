@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace", required=True, help="Existing Git repository checkout.")
     parser.add_argument("--task", required=True, help="Repository-level issue to solve.")
     parser.add_argument("--instance-id", "--instance_id", default="manual")
-    parser.add_argument("--provider", default="anthropic")
+    parser.add_argument("--provider", choices=["anthropic", "openai", "siliconflow"], default="anthropic")
     parser.add_argument("--model", required=True)
     parser.add_argument("--api-key")
     parser.add_argument("--base-url")

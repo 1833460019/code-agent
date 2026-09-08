@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add cross-platform CI, linting, coverage enforcement, and contributor instructions.
+- Add a tested OpenAI-compatible model adapter and first-class SiliconFlow configuration.
 
 ## 0.2.0 - 2026-09-07
 

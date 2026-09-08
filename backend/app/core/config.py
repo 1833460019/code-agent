@@ -14,8 +14,12 @@ class Settings(BaseSettings):
 
     app_name: str = "code-agent"
     model_id: str = Field(default="claude-3-5-sonnet-latest", alias="MODEL_ID")
+    model_provider: str = Field(default="anthropic", alias="MODEL_PROVIDER")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
     anthropic_base_url: str | None = Field(default=None, alias="ANTHROPIC_BASE_URL")
+    siliconflow_api_key: str | None = Field(default=None, alias="SILICONFLOW_API_KEY")
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     max_agent_steps: int = Field(default=20, alias="MAX_AGENT_STEPS")
     max_tokens: int = Field(default=4096, alias="MAX_TOKENS")
     context_soft_limit_chars: int = Field(default=120_000, alias="CONTEXT_SOFT_LIMIT_CHARS")

@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task-file", "--task_file", required=True)
     parser.add_argument("--instance-id", "--instance_id")
     parser.add_argument("--workspace", required=True, help="Clean checkout at task base_commit.")
-    parser.add_argument("--provider", default="anthropic")
+    parser.add_argument("--provider", choices=["anthropic", "openai", "siliconflow"], default="anthropic")
     parser.add_argument("--model", required=True)
     parser.add_argument("--api-key")
     parser.add_argument("--base-url")

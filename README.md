@@ -23,7 +23,7 @@ $env:ANTHROPIC_API_KEY = "你的密钥"
 python scripts/run_agent.py --workspace C:/repos/example --task "修复失败的测试，验证后结束" --model YOUR_MODEL_ID --profile full
 ```
 
-`--workspace` 应为单独的 Git checkout，不能是 Agent 项目自身或包含它的父目录。Linux/macOS 激活虚拟环境用 `source .venv/bin/activate`。也支持 `.env`、`ANTHROPIC_BASE_URL` / `--base-url` 配置 Anthropic-compatible endpoint；可通过 `Model` 接口扩展其他供应商。
+`--workspace` 应为单独的 Git checkout，不能是 Agent 项目自身或包含它的父目录。Linux/macOS 激活虚拟环境用 `source .venv/bin/activate`。支持 Anthropic、OpenAI-compatible 与 SiliconFlow；SiliconFlow 使用 `--provider siliconflow --model MODEL_ID` 以及本地 `SILICONFLOW_API_KEY`，默认 Base URL 为 `https://api.siliconflow.cn/v1`。也可通过 `Model` 接口扩展其他供应商。
 
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 
