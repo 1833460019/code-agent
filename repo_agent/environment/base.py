@@ -43,3 +43,7 @@ class Environment(ABC):
     @abstractmethod
     def get_diff(self) -> str:
         raise NotImplementedError
+
+    def clone_for_workspace(self, workspace: str | Path) -> "Environment":
+        """Create the same execution backend for an isolated checkout."""
+        raise NotImplementedError

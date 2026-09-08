@@ -4,7 +4,6 @@ import asyncio
 import uuid
 from dataclasses import asdict
 
-from .environment.local import LocalEnvironment
 from .storage import atomic_json
 
 
@@ -21,8 +20,8 @@ class BackgroundManager:
             raise ValueError("Background concurrency limit reached")
         key = uuid.uuid4().hex[:12]
         self.jobs[key] = dict(id=key, command=command, status="running")
-        if isinstance(self.environment, LocalEnvironment):
-            env = LocalEnvironment(self.environment.workspace, command_timeout=timeout)
+        if hasattr(self.environment, "clone_for_workspace"):
+            env = self.environment.clone_for_workspace(self.environment.workspace)
         else:
             env = self.environment
         self.envs[key] = env

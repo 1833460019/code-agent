@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from repo_agent import LocalEnvironment, RepoAgent, RepoAgentConfig
+from repo_agent import DockerEnvironment, LocalEnvironment, RepoAgent, RepoAgentConfig
 from repo_agent.models.factory import create_model
 from scripts.common import DEFAULT_RUNS_DIR, ensure_external_workspace
 from repo_agent.permissions import PermissionPolicy, PermissionRule
@@ -29,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", "--max_steps", type=int, default=50)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--command-timeout", type=float, default=120.0)
+    parser.add_argument("--environment", choices=["local", "docker"], default="local")
+    parser.add_argument("--docker-image", help="Trusted POSIX image used when --environment=docker")
     parser.add_argument("--runs-dir", default=str(DEFAULT_RUNS_DIR))
     parser.add_argument("--profile", choices=["full", "baseline"], default="full")
     parser.add_argument("--state-dir")
@@ -58,7 +60,13 @@ def console_event(event: dict) -> None:
 
 async def async_main(args: argparse.Namespace) -> int:
     ensure_external_workspace(args.workspace)
-    environment = LocalEnvironment(args.workspace, command_timeout=args.command_timeout)
+    if args.environment == "docker":
+        if not args.docker_image:
+            raise ValueError("--docker-image is required for Docker execution")
+        environment = DockerEnvironment(args.workspace, image=args.docker_image,
+                                        command_timeout=args.command_timeout)
+    else:
+        environment = LocalEnvironment(args.workspace, command_timeout=args.command_timeout)
     model = create_model(
         provider=args.provider,
         model=args.model,

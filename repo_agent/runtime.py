@@ -124,8 +124,7 @@ class Runtime:
         if agent_type not in {"explore", "code"}:
             raise ValueError("agent_type must be explore or code")
         if agent_type == "explore":
-            from .environment.local import LocalEnvironment
-            env = LocalEnvironment(self.environment.workspace, command_timeout=self.environment.command_timeout)
+            env = self.environment.clone_for_workspace(self.environment.workspace)
             worktree = None
         else:
             worktree = self.worktrees.create("sub-" + uuid.uuid4().hex[:12])["name"]

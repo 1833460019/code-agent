@@ -4,6 +4,7 @@
 
 - Add cross-platform CI, linting, coverage enforcement, and contributor instructions.
 - Add a tested OpenAI-compatible model adapter and first-class SiliconFlow configuration.
+- Add a resource-limited, network-disabled Docker execution environment.
 
 ## 0.2.0 - 2026-09-07
 

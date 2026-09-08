@@ -52,7 +52,7 @@ class WorktreeManager:
 
     def environment_for(self, name):
         record = self.get(name)
-        env = LocalEnvironment(record["path"], command_timeout=self.environment.command_timeout)
+        env = self.environment.clone_for_workspace(record["path"])
         env.base_commit = record["base_commit"]
         return env
 

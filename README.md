@@ -35,6 +35,7 @@ CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工
 | `--permission-mode ask/readonly/trusted` | 审批、只读或可信执行 |
 | `--permission-rules examples/permissions.json` | 按工具名及命令 glob 配置 allow/deny/ask，deny 优先 |
 | `--max-steps 50 --max-runtime 1800` | 单次运行的步数与总时间预算 |
+| `--environment docker --docker-image IMAGE` | 在禁网、非 root、资源受限容器中执行目标命令 |
 | `--model-timeout 120 --command-timeout 120` | 单次模型及命令超时 |
 | `--max-workers 3 --child-max-steps 20` | 后台/团队并发与子循环预算 |
 | `--runs-dir PATH --state-dir PATH` | 轨迹与持久化服务目录，必须在目标 workspace 外 |
@@ -133,7 +134,7 @@ python scripts/run_swebench.py --task-file tasks.json --instance-id project__pro
 
 ## 安全边界与验证
 
-显式文件路径及命令 cwd 有 workspace 越界检查，Shell 默认过滤 API 凭据类环境变量，权限规则在执行前校验。但 `LocalEnvironment` 不是操作系统沙箱：Shell、仓库测试和 MCP 进程仍具有宿主进程权限。运行不可信仓库必须额外使用容器/虚拟机；不要在简历中将当前实现称为 Docker 沙箱。
+显式文件路径及命令 cwd 有 workspace 越界检查，Shell 默认过滤 API 凭据类环境变量，权限规则在执行前校验。`LocalEnvironment` 不是操作系统沙箱；`DockerEnvironment` 才会将目标命令放入默认禁网、只读 root、cap-drop、非 root、CPU/内存/PID 受限的容器。目标 workspace 是唯一可写 bind mount，镜像必须由操作者信任。MCP server 仍运行在宿主进程中，不在目标 DockerEnvironment 内。
 
 ```powershell
 pip install -r backend/requirements.txt

@@ -120,6 +120,9 @@ class LocalEnvironment(Environment):
                 raise EnvironmentError("Previous commands are still running")
             self._cancelled = False
 
+    def clone_for_workspace(self, workspace: str | Path) -> "LocalEnvironment":
+        return LocalEnvironment(workspace, command_timeout=self.command_timeout)
+
     def read_file(self, path: str | Path) -> str:
         target = self.resolve_path(path)
         if not target.is_file():
