@@ -1,9 +1,7 @@
 import asyncio
-import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from pathlib import Path
 
 from repo_agent.background import BackgroundManager
 from repo_agent.environment.local import LocalEnvironment

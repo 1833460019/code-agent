@@ -4,7 +4,7 @@ from typing import Any
 
 from ..environment.base import Environment
 from ..schemas import ToolResult
-from .base import Tool, truncated
+from .base import Tool
 
 
 class ReadFileTool(Tool):

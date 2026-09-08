@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 from repo_agent.models.base import Model
-from repo_agent.schemas import ModelResponse
 from tests.support import WorkspaceCase, call, observations
 
 

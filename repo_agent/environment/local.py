@@ -93,7 +93,7 @@ class LocalEnvironment(Environment):
                 exit_code=process.returncode,
                 duration_seconds=time.perf_counter() - started,
             )
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             stop_process(process)
             stdout, stderr = process.communicate()
             return CommandResult(

@@ -2,6 +2,8 @@
 
 基于 learn-claude-code 思想的轻量 Coding Agent Runtime。CLI、Web、子 Agent、团队成员和 SWE-bench Adapter 共用 `RepoAgent → AgentLoop → Tool → Environment`，不依赖 LangChain / LangGraph / CrewAI。
 
+[![CI](https://github.com/1833460019/code-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/1833460019/code-agent/actions/workflows/ci.yml)
+
 提供两个配置：
 
 - `full`：覆盖本地 LCC Web 教程的 20 章能力，包括权限、Hooks、任务图、真实子 Agent / 团队、Skills、记忆、上下文压缩、后台任务、Cron、Worktree 和 MCP。

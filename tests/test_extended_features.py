@@ -2,10 +2,8 @@ import asyncio
 import json
 import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from repo_agent.background import BackgroundManager
-from repo_agent.context.manager import ContextManager
 from repo_agent.environment.local import LocalEnvironment
 from repo_agent.logging.trajectory import TrajectoryRecorder
 from repo_agent.permissions import PermissionPolicy, PermissionRule

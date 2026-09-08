@@ -2,12 +2,10 @@ import asyncio
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 from repo_agent.context.manager import ContextManager
-from repo_agent.hooks import Hooks
 from repo_agent.permissions import PermissionPolicy, PermissionRule
-from repo_agent.schemas import Message, ToolCall, ModelResponse
+from repo_agent.schemas import Message, ToolCall
 from tests.support import WorkspaceCase, SequenceModel, call
 
 
