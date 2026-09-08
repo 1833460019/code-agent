@@ -9,6 +9,7 @@
 - Add a resumable SWE-bench batch runner with isolated checkouts and predictions JSONL.
 - Add SQLite run checkpoints, single-writer leases, and CLI resume support.
 - Add failure taxonomy, cost/latency summaries, paired bootstrap confidence intervals, and ablation manifests.
+- Add run/trajectory/verification APIs and a frontend evidence inspector.
 
 ## 0.2.0 - 2026-09-07
 

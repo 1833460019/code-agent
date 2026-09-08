@@ -149,6 +149,8 @@ python scripts/summarize_runs.py ../baseline-results --compare ../full-results
 
 `configs/ablation/baseline.json` 与 `configs/ablation/full.json` 固定两套实验口径。
 
+Web 控制台左侧的 **Runs & evidence** 可打开历史运行，查看 result、逐步 trajectory、finish 验证证据和最终 patch；对应只读接口为 `GET /api/runs` 与 `GET /api/runs/{run_id}`。
+
 ## 轨迹与结果
 
 每次运行创建唯一目录，不覆盖既有结果：

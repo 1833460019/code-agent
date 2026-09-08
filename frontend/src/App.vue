@@ -43,12 +43,33 @@ type SessionSummary = {
   updated_at: number
 }
 
+type RunSummary = {
+  run_id: string
+  instance_id: string
+  status: string
+  termination_reason: string
+  total_steps: number
+  total_tokens: number
+  runtime: number
+  updated_at: number
+}
+
+type RunDetail = {
+  run_id: string
+  result: Record<string, unknown>
+  trajectory: { steps?: Array<Record<string, unknown>>; events?: Array<Record<string, unknown>> } | null
+  verification: Record<string, unknown> | null
+  patch: string
+}
+
 type TimelineItem = AgentEvent & { id: string; ts: number }
 
 const API_BASE = 'http://127.0.0.1:18002'
 const input = ref('')
 const sessionId = ref<string | null>(null)
 const sessions = ref<SessionSummary[]>([])
+const runs = ref<RunSummary[]>([])
+const selectedRun = ref<RunDetail | null>(null)
 const timeline = ref<TimelineItem[]>([])
 const todos = ref<Array<{ content: string; status: string; activeForm?: string }>>([])
 const isRunning = ref(false)
@@ -159,6 +180,18 @@ async function refreshSessions() {
   sessions.value = await response.json() as SessionSummary[]
 }
 
+async function refreshRuns() {
+  const response = await fetch(`${API_BASE}/api/runs`)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  runs.value = await response.json() as RunSummary[]
+}
+
+async function loadRun(id: string) {
+  const response = await fetch(`${API_BASE}/api/runs/${id}`)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  selectedRun.value = await response.json() as RunDetail
+}
+
 async function loadSession(id: string) {
   if (isRunning.value) return
   const response = await fetch(`${API_BASE}/api/sessions/${id}`)
@@ -204,6 +237,7 @@ async function sendMessage() {
       }
     }
     await refreshSessions()
+    await refreshRuns()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     addEvent({ type: 'error', content: message, is_error: true })
@@ -234,7 +268,7 @@ function formatTime(ts: number) {
 }
 
 onMounted(() => {
-  refreshSessions().catch((error) => {
+  Promise.all([refreshSessions(), refreshRuns()]).catch((error) => {
     errorText.value = error instanceof Error ? error.message : String(error)
   })
 })
@@ -273,6 +307,25 @@ onMounted(() => {
           <small>{{ session.message_count }} msgs 璺?{{ formatTime(session.updated_at) }}</small>
         </button>
         <div v-if="sessions.length === 0" class="empty">No saved sessions</div>
+      </section>
+
+      <section class="panel sessions-panel">
+        <div class="panel-title">
+          <Hammer :size="16" />
+          Runs & evidence
+        </div>
+        <button
+          v-for="run in runs.slice(0, 8)"
+          :key="run.run_id"
+          class="session-row"
+          :class="{ active: selectedRun?.run_id === run.run_id }"
+          type="button"
+          @click="loadRun(run.run_id)"
+        >
+          <span>{{ run.instance_id }}</span>
+          <small>{{ run.status }} · {{ run.total_steps }} steps · {{ run.total_tokens }} tok</small>
+        </button>
+        <div v-if="runs.length === 0" class="empty">No completed runs</div>
       </section>
 
       <section class="panel status-panel">
@@ -340,6 +393,30 @@ onMounted(() => {
     </main>
 
     <aside class="rightbar">
+      <section v-if="selectedRun" class="panel evidence-panel">
+        <div class="panel-title">
+          <CheckCircle2 :size="16" />
+          Run evidence
+        </div>
+        <div class="metric"><span>Status</span><strong>{{ selectedRun.result.status }}</strong></div>
+        <div class="metric"><span>Reason</span><strong>{{ selectedRun.result.termination_reason }}</strong></div>
+        <div class="metric"><span>Steps</span><strong>{{ selectedRun.result.total_steps }}</strong></div>
+        <div class="metric"><span>Tokens</span><strong>{{ selectedRun.result.total_tokens }}</strong></div>
+        <div class="metric"><span>Patch</span><strong>{{ selectedRun.patch.length }} chars</strong></div>
+        <details v-if="selectedRun.verification">
+          <summary>Verification</summary>
+          <pre>{{ JSON.stringify(selectedRun.verification, null, 2) }}</pre>
+        </details>
+        <details>
+          <summary>Trajectory ({{ selectedRun.trajectory?.steps?.length ?? 0 }} steps)</summary>
+          <pre>{{ JSON.stringify(selectedRun.trajectory?.steps ?? [], null, 2) }}</pre>
+        </details>
+        <details v-if="selectedRun.patch">
+          <summary>Final patch</summary>
+          <pre>{{ selectedRun.patch }}</pre>
+        </details>
+      </section>
+
       <section class="panel tools-panel">
         <div class="panel-title">
           <Hammer :size="16" />

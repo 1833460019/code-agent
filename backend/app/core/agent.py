@@ -78,6 +78,40 @@ class AgentKernel:
     def list_sessions(self):
         return sorted(self.sessions.values(), key=lambda s: s.updated_at, reverse=True)
 
+    def list_runs(self):
+        root = self.state_dir / "runs"
+        runs = []
+        for path in root.glob("*/result.json"):
+            try:
+                result = json.loads(path.read_text(encoding="utf-8"))
+                runs.append({
+                    "run_id": path.parent.name,
+                    "instance_id": result.get("instance_id", path.parent.name),
+                    "status": result.get("status", "unknown"),
+                    "termination_reason": result.get("termination_reason", ""),
+                    "total_steps": result.get("total_steps", 0),
+                    "total_tokens": result.get("total_tokens", 0),
+                    "runtime": result.get("runtime", 0),
+                    "updated_at": path.stat().st_mtime,
+                })
+            except (OSError, ValueError):
+                continue
+        return sorted(runs, key=lambda run: run["updated_at"], reverse=True)
+
+    def get_run(self, run_id):
+        directory = (self.state_dir / "runs" / identifier(run_id)).resolve()
+        runs_root = (self.state_dir / "runs").resolve()
+        if not directory.is_relative_to(runs_root) or not (directory / "result.json").is_file():
+            raise KeyError(run_id)
+        data = {}
+        for name in ("result", "trajectory", "verification"):
+            path = directory / f"{name}.json"
+            data[name] = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+        patch = directory / "patch.diff"
+        data["patch"] = patch.read_text(encoding="utf-8") if patch.is_file() else ""
+        data["run_id"] = run_id
+        return data
+
     def resolve_approval(self, request_id, approved):
         future = self.approvals.get(request_id)
         if future is None or future.done():

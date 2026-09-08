@@ -260,6 +260,21 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tool-row.failed strong,
 .tool-row.failed span { color: #ff8f84; }
 .tool-row pre { max-height: 220px; overflow: auto; padding: 9px; border-radius: 8px; background: #0d1117; color: #c7d1dc; border: 1px solid #202a35; }
+.evidence-panel details { margin-top: 9px; color: #a9b6c4; font-size: 12px; }
+.evidence-panel summary { cursor: pointer; font-weight: 700; }
+.evidence-panel pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid #202a35;
+  border-radius: 8px;
+  color: #c7d1dc;
+  background: #0d1117;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+}
 
 @media (max-width: 1120px) {
   .shell { grid-template-columns: 260px minmax(0, 1fr); }

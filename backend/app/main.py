@@ -74,6 +74,19 @@ async def list_sessions() -> list[SessionSummary]:
     ]
 
 
+@app.get("/api/runs")
+async def list_runs():
+    return kernel.list_runs()
+
+
+@app.get("/api/runs/{run_id}")
+async def get_run(run_id: str):
+    try:
+        return kernel.get_run(run_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(404, "Run not found") from exc
+
+
 @app.get("/api/sessions/{session_id}")
 async def get_session(session_id: str) -> ChatResponse:
     session = kernel.get_session(session_id)

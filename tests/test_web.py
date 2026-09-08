@@ -95,4 +95,13 @@ class WebTests(WorkspaceCase):
                 self.assertIn("Verify", model.requests[-1]["system_prompt"])
                 self.assertEqual(client.get("/api/sessions").json()[0]["todos"][0]["content"], "Verify")
                 self.assertEqual(client.get("/api/schedules").status_code, 200)
+                runs = client.get("/api/runs")
+                self.assertEqual(runs.status_code, 200)
+                self.assertGreaterEqual(len(runs.json()), 2)
+                run_id = runs.json()[0]["run_id"]
+                detail = client.get(f"/api/runs/{run_id}")
+                self.assertEqual(detail.status_code, 200)
+                self.assertIn("trajectory", detail.json())
+                self.assertIn("patch", detail.json())
+                self.assertEqual(client.get("/api/runs/not-found").status_code, 404)
                 self.assertEqual(client.post("/api/approvals/expired", json={"approved": True}).status_code, 404)
