@@ -78,6 +78,18 @@ class ExtendedFeaturesTests(WorkspaceCase):
         self.assertEqual(model.max_tokens, 1024)
         self.assertFalse((self.repo / "bad").exists())
 
+    def test_prompt_switches_from_exploration_to_implementation_near_limit(self):
+        model = SequenceModel([
+            call("read_file", path="base.txt"),
+            call("read_file", path="base.txt"),
+            call("finish", summary="done"),
+        ])
+        result = asyncio.run(self.agent(model, max_steps=3).run("Fix the issue"))
+        self.assertEqual(result.status, "success", result.error)
+        self.assertNotIn("Execution budget warning", model.requests[0]["system_prompt"])
+        self.assertIn("Implement the smallest likely source fix now", model.requests[1]["system_prompt"])
+        self.assertIn("Final-step priority", model.requests[1]["system_prompt"])
+
     def test_context_error_recovers_without_orphan_tool_results(self):
         history = [Message(role="user", content="issue")] + [Message(role="user", content="x" * 600) for _ in range(8)]
         model = SequenceModel([ValueError("context length exceeded"), call("finish", summary="recovered")])
