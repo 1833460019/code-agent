@@ -6,7 +6,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from ...storage import atomic_json
+from ...storage import atomic_json, atomic_text
 from .schema import SWEbenchTask
 
 
@@ -96,12 +96,10 @@ class BatchStore:
             for value in self.data["tasks"].values()
             if _is_successful(value)
         ]
-        temporary = self.root / "predictions.jsonl.tmp"
-        temporary.write_text(
+        atomic_text(
+            self.root / "predictions.jsonl",
             "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in predictions),
-            encoding="utf-8",
         )
-        temporary.replace(self.root / "predictions.jsonl")
 
 
 def _safe_name(value: str) -> str:

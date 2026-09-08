@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from ..storage import atomic_text
+
 
 class TrajectoryRecorder:
     """Incrementally persist complete model/tool interactions and final artifacts."""
@@ -106,9 +108,7 @@ class TrajectoryRecorder:
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-    temporary.replace(path)
+    atomic_text(path, json.dumps(data, indent=2, ensure_ascii=False, default=str))
 
 
 def _now() -> str:

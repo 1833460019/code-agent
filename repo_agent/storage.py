@@ -16,10 +16,25 @@ def identifier(value: str) -> str:
 
 
 def atomic_json(path: Path, value) -> None:
+    atomic_text(path, json.dumps(value, ensure_ascii=False, indent=2))
+
+
+def atomic_text(path: Path, content: str, *, replace_attempts: int = 8) -> None:
+    """Atomically replace a text file, tolerating brief Windows reader/AV locks."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(temporary, path)
+    temporary.write_text(content, encoding="utf-8")
+    try:
+        for attempt in range(replace_attempts):
+            try:
+                os.replace(temporary, path)
+                return
+            except PermissionError:
+                if attempt + 1 == replace_attempts:
+                    raise
+                time.sleep(min(0.01 * (2**attempt), 0.25))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 @contextmanager
