@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -14,7 +15,7 @@ from .core.config import get_settings
 from .core.model import create_model_adapter
 from .core.schemas import ChatRequest, ChatResponse, SessionSummary
 
-load_dotenv(override=True)
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 settings = get_settings()
 kernel = AgentKernel(settings=settings, model=create_model_adapter(settings))

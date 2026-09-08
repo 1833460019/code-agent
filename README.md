@@ -49,6 +49,8 @@ python scripts/run_swebench_batch.py --task-file swebench-lite-dev.json \
 
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 
+Web 后端只从明确的 `backend/.env` 读取本地默认值，且启动时传入的系统/容器环境变量优先，便于安全地覆盖 workspace、模型和运行预算。
+
 常用选项：
 
 | 选项 | 用途 |
