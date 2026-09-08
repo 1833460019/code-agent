@@ -6,6 +6,7 @@
 - Add a tested OpenAI-compatible model adapter and first-class SiliconFlow configuration.
 - Add a resource-limited, network-disabled Docker execution environment.
 - Add configurable finish gates with durable patch and command evidence.
+- Add a resumable SWE-bench batch runner with isolated checkouts and predictions JSONL.
 
 ## 0.2.0 - 2026-09-07
 

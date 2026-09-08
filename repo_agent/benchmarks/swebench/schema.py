@@ -23,16 +23,26 @@ class SWEbenchTask:
 
 
 def load_task(path: str | Path, *, instance_id: str | None = None) -> SWEbenchTask:
+    tasks = load_tasks(path)
+    if not instance_id:
+        if len(tasks) != 1:
+            raise ValueError("--instance-id is required when task JSON contains multiple tasks")
+        return tasks[0]
+    for task in tasks:
+        if task.instance_id == instance_id:
+            return task
+    raise ValueError(f"Instance not found in task JSON: {instance_id}")
+
+
+def load_tasks(path: str | Path) -> list[SWEbenchTask]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if isinstance(payload, dict):
-        return SWEbenchTask.from_dict(payload)
+        payload = payload.get("tasks", payload)
+        if isinstance(payload, dict):
+            return [SWEbenchTask.from_dict(payload)]
     if not isinstance(payload, list):
         raise ValueError("Task JSON must contain an object or a list of objects")
-    if not instance_id:
-        if len(payload) != 1:
-            raise ValueError("--instance-id is required when task JSON contains multiple tasks")
-        return SWEbenchTask.from_dict(payload[0])
-    for item in payload:
-        if isinstance(item, dict) and item.get("instance_id") == instance_id:
-            return SWEbenchTask.from_dict(item)
-    raise ValueError(f"Instance not found in task JSON: {instance_id}")
+    tasks = [SWEbenchTask.from_dict(item) for item in payload]
+    if len({task.instance_id for task in tasks}) != len(tasks):
+        raise ValueError("SWE-bench task instance_id values must be unique")
+    return tasks

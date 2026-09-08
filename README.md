@@ -34,6 +34,17 @@ python scripts/run_agent.py --workspace /path/to/repo --task "Fix the bug" --mod
 
 每次 `finish` 尝试都会写入 `verification.json`，记录 diff 哈希、命令退出码和有界输出；验证失败时 Agent 会继续修复，而不是把口头完成当作成功。
 
+SWE-bench Lite dev 可批量抓取并断点续跑（先用 `--limit 1` 控制费用）：
+
+```bash
+python scripts/fetch_swebench_tasks.py --split dev --output swebench-lite-dev.json
+python scripts/run_swebench_batch.py --task-file swebench-lite-dev.json \
+  --workspace-root ../swebench-workspaces --output-dir ../swebench-results \
+  --provider siliconflow --model deepseek-ai/DeepSeek-V4-Flash --limit 1
+```
+
+批处理为每个实例准备独立、精确定位到 `base_commit` 的干净 checkout；`manifest.json` 原子记录状态，重启后自动跳过已完成任务，`predictions.jsonl` 可直接交给官方 SWE-bench harness。
+
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 
 常用选项：

@@ -7,11 +7,29 @@ import unittest
 import uuid
 from pathlib import Path
 
-from repo_agent.benchmarks.swebench import SWEbenchAdapter, SWEbenchTask, load_task
+from repo_agent.benchmarks.swebench import BatchStore, SWEbenchAdapter, SWEbenchTask, load_task, load_tasks
 from repo_agent.environment import EnvironmentError, LocalEnvironment
 
 
 class SWEbenchAdapterTest(unittest.TestCase):
+    def test_batch_store_resumes_and_writes_official_jsonl(self) -> None:
+        root = Path(__file__).resolve().parent / ".work" / uuid.uuid4().hex
+        root.mkdir(parents=True)
+        try:
+            prediction = {
+                "instance_id": "demo__repo-1",
+                "model_name_or_path": "demo-model",
+                "model_patch": "diff --git a/a b/a",
+            }
+            store = BatchStore(root, config={"model": "demo-model"})
+            store.update("demo__repo-1", state="completed", prediction=prediction)
+            resumed = BatchStore(root, config={"model": "ignored-on-resume"})
+            self.assertTrue(resumed.completed("demo__repo-1"))
+            lines = (root / "predictions.jsonl").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(json.loads(lines[0]), prediction)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_loads_one_task_from_list_and_validates_exact_head(self) -> None:
         root = Path(__file__).resolve().parent / ".work" / uuid.uuid4().hex
         root.mkdir(parents=True)
@@ -38,6 +56,7 @@ class SWEbenchAdapterTest(unittest.TestCase):
                 encoding="utf-8",
             )
             task = load_task(task_file, instance_id="demo__one-1")
+            self.assertEqual(len(load_tasks(task_file)), 1)
             SWEbenchAdapter(LocalEnvironment(root)).validate_workspace(task)
             self.assertEqual(task.base_commit, head)
             task_file.unlink()
