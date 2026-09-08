@@ -133,6 +133,7 @@ class LocalEnvironment(Environment):
         target = self.resolve_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="")
+        self._invalidate_python_bytecode(target)
 
     def edit_file(self, path: str | Path, old_text: str, new_text: str) -> None:
         if not old_text:
@@ -149,6 +150,23 @@ class LocalEnvironment(Environment):
                 f"Expected exactly one occurrence in {path}, found {occurrences}"
             )
         target.write_text(content.replace(old_text, new_text, 1), encoding="utf-8", newline="")
+        self._invalidate_python_bytecode(target)
+
+    def _invalidate_python_bytecode(self, target: Path) -> None:
+        """Prevent same-second, same-size Python edits from reusing stale code."""
+        if target.suffix.lower() != ".py":
+            return
+        candidates = [target.with_suffix(".pyc")]
+        cache_dir = target.parent / "__pycache__"
+        if cache_dir.is_dir():
+            candidates.extend(cache_dir.glob(f"{target.stem}.*.pyc"))
+        for candidate in candidates:
+            try:
+                candidate.resolve(strict=False).relative_to(self.workspace)
+                candidate.unlink(missing_ok=True)
+            except (OSError, ValueError):
+                # Cache cleanup must never turn a successful source edit into a failure.
+                continue
 
     def get_diff(self) -> str:
         check = self.git("rev-parse", "--is-inside-work-tree")
