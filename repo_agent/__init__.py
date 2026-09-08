@@ -3,5 +3,13 @@
 from .agent.agent import RepoAgent, RepoAgentConfig
 from .environment.docker import DockerEnvironment, DockerLimits
 from .environment.local import LocalEnvironment
+from .verification import VerificationPolicy
 
-__all__ = ["DockerEnvironment", "DockerLimits", "LocalEnvironment", "RepoAgent", "RepoAgentConfig"]
+__all__ = [
+    "DockerEnvironment",
+    "DockerLimits",
+    "LocalEnvironment",
+    "RepoAgent",
+    "RepoAgentConfig",
+    "VerificationPolicy",
+]

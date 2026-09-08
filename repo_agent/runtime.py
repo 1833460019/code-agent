@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import re
 import uuid
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from jsonschema import Draft202012Validator
@@ -16,11 +18,13 @@ from .permissions import PermissionPolicy
 from .prompts.builder import PromptBuilder
 from .scheduler import CronScheduler
 from .schemas import Message, ToolResult
+from .storage import atomic_json
 from .tasks import TaskStore, TodoList
 from .teams import TeamManager
 from .tools.base import FunctionTool
 from .tools.registry import create_coding_tools
 from .worktrees import WorktreeManager
+from .verification import VerificationPolicy
 
 
 class Runtime:
@@ -47,6 +51,8 @@ class Runtime:
         self.compact_requested: str | None = None
         self.inbox_buffer: list[dict] = []
         self.child_results = []
+        self.verification_attempts: list[dict] = []
+        self.last_verification: dict | None = None
         self.tools = self._tools()
 
     async def start(self):
@@ -68,11 +74,86 @@ class Runtime:
             raise PermissionError("An approved plan is required before executing this tool")
         payload = {"tool": name, "arguments": arguments, "runtime": self}
         await self.hooks.emit("before_tool", payload)
-        if name == "finish" and (self.background.pending or (not self.parent and self.teams.pending)):
-            return ToolResult(False, "Background commands or teammates are still running; wait or shut them down first")
+        if name == "finish":
+            if self.background.pending or (not self.parent and self.teams.pending):
+                return ToolResult(False, "Background commands or teammates are still running; wait or shut them down first")
+            verification = await self._verify_finish()
+            if not verification.ok:
+                await self.hooks.emit("after_tool", payload | {"result": verification})
+                return verification
         result = await tool.aexecute(arguments, self.environment)
+        if name == "finish" and self.last_verification:
+            result.metadata["verification"] = self.last_verification
         await self.hooks.emit("after_tool", payload | {"result": result})
         return result
+
+    async def _verify_finish(self) -> ToolResult:
+        policy = self.config.verification
+        failures: list[str] = []
+        try:
+            patch = await asyncio.to_thread(self.environment.get_diff)
+        except Exception as exc:
+            patch = ""
+            failures.append(f"could not inspect final diff: {type(exc).__name__}: {exc}")
+        if policy.require_patch and not patch.strip():
+            failures.append("the final diff is empty")
+        if policy.require_todos_complete:
+            pending = [
+                item.get("content", "")
+                for item in self.todos.items
+                if item.get("status") != "completed"
+            ]
+            if pending:
+                failures.append("unfinished todos: " + ", ".join(pending[:10]))
+        commands = []
+        for command in policy.commands:
+            try:
+                result = await asyncio.to_thread(
+                    self.environment.execute, command, timeout=policy.command_timeout
+                )
+                command_evidence = {
+                    "command": command,
+                    "exit_code": result.exit_code,
+                    "duration_seconds": result.duration_seconds,
+                    "timed_out": result.timed_out,
+                    "output": result.output[:20_000],
+                }
+                if result.exit_code != 0:
+                    failures.append(f"verification command failed ({result.exit_code}): {command}")
+            except Exception as exc:
+                command_evidence = {
+                    "command": command,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                failures.append(f"verification command errored: {command}")
+            commands.append(command_evidence)
+        attempt = {
+            "attempt": len(self.verification_attempts) + 1,
+            "accepted": not failures,
+            "failures": failures,
+            "patch_chars": len(patch),
+            "patch_sha256": hashlib.sha256(patch.encode()).hexdigest() if patch else None,
+            "commands": commands,
+        }
+        self.verification_attempts.append(attempt)
+        self.last_verification = attempt
+        atomic_json(
+            self.recorder.run_dir / "verification.json",
+            {"policy": asdict(policy), "attempts": self.verification_attempts},
+        )
+        self.recorder.event("verification", **attempt)
+        if failures:
+            return ToolResult(
+                False,
+                "Finish rejected by verification gate:\n- " + "\n- ".join(failures)
+                + "\nFix the failures, then call finish again.",
+                metadata={"verification": attempt},
+            )
+        return ToolResult(
+            True,
+            "Verification gate passed.",
+            metadata={"verification": attempt},
+        )
 
     async def before_step(self, state):
         if self.features.background:
@@ -105,7 +186,8 @@ class Runtime:
         from .agent.agent import RepoAgent
         config = replace(self.config, max_steps=self.config.child_max_steps,
                          runs_dir=self.recorder.run_dir / "children", state_dir=self.root,
-                         auto_memory=False, permission_mode="readonly" if readonly else self.config.permission_mode)
+                         auto_memory=False, permission_mode="readonly" if readonly else self.config.permission_mode,
+                         verification=VerificationPolicy())
         child = RepoAgent(model=self.model, environment=environment, config=config, hooks=self.hooks,
                           policy=PermissionPolicy("readonly") if readonly else self.policy)
         result = await child.run(prompt, instance_id=name + "-" + uuid.uuid4().hex[:8],

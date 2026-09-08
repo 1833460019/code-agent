@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import subprocess
 import unittest
 import uuid
 from pathlib import Path
 
-from repo_agent import LocalEnvironment, RepoAgent, RepoAgentConfig
+from repo_agent import LocalEnvironment, RepoAgent, RepoAgentConfig, VerificationPolicy
 from repo_agent.models.base import Model
 from repo_agent.schemas import Message, ModelResponse, ToolCall
 
@@ -23,7 +24,55 @@ class NeverFinishModel(Model):
         )
 
 
+class RetryFinishModel(Model):
+    def __init__(self):
+        self.calls = 0
+
+    @property
+    def name(self) -> str:
+        return "retry-finish"
+
+    async def complete(self, **kwargs) -> ModelResponse:
+        self.calls += 1
+        calls = {
+            1: ToolCall("finish-early", "finish", {"summary": "done"}),
+            2: ToolCall("write", "write_file", {"path": "fixed.txt", "content": "fixed\n"}),
+            3: ToolCall("finish-final", "finish", {"summary": "verified"}),
+        }
+        return ModelResponse(tool_calls=[calls[self.calls]])
+
+
 class TerminationTest(unittest.TestCase):
+    def test_finish_gate_rejects_empty_patch_and_persists_evidence(self) -> None:
+        root = Path(__file__).resolve().parent / ".work" / uuid.uuid4().hex
+        root.mkdir(parents=True)
+        try:
+            subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+            agent = RepoAgent(
+                model=RetryFinishModel(),
+                environment=LocalEnvironment(root),
+                config=RepoAgentConfig(
+                    max_steps=4,
+                    runs_dir=root.parent / "runs",
+                    verification=VerificationPolicy(
+                        require_patch=True,
+                        commands=["git diff --check"],
+                    ),
+                ),
+            )
+            result = asyncio.run(agent.run("Create a real patch before finishing."))
+            self.assertEqual(result.status, "success")
+            self.assertTrue(result.verification["accepted"])
+            evidence = json.loads(
+                (Path(result.run_dir) / "verification.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(evidence["attempts"]), 2)
+            self.assertFalse(evidence["attempts"][0]["accepted"])
+            self.assertIn("final diff is empty", evidence["attempts"][0]["failures"][0])
+            self.assertEqual(evidence["attempts"][1]["commands"][0]["exit_code"], 0)
+        finally:
+            shutil.rmtree(root, ignore_errors=True)
+
     def test_max_steps_still_saves_partial_patch(self) -> None:
         root = Path(__file__).resolve().parent / ".work" / uuid.uuid4().hex
         root.mkdir(parents=True)

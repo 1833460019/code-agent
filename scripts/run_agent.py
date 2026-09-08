@@ -10,7 +10,13 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from repo_agent import DockerEnvironment, LocalEnvironment, RepoAgent, RepoAgentConfig
+from repo_agent import (
+    DockerEnvironment,
+    LocalEnvironment,
+    RepoAgent,
+    RepoAgentConfig,
+    VerificationPolicy,
+)
 from repo_agent.models.factory import create_model
 from scripts.common import DEFAULT_RUNS_DIR, ensure_external_workspace
 from repo_agent.permissions import PermissionPolicy, PermissionRule
@@ -45,6 +51,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-workers", type=int, default=3)
     parser.add_argument("--child-max-steps", type=int, default=20)
     parser.add_argument("--serve", action="store_true", help="Keep consuming scheduled prompts after the initial task")
+    parser.add_argument("--require-patch", action="store_true", help="Reject finish when the diff is empty")
+    parser.add_argument("--require-todos-complete", action="store_true")
+    parser.add_argument(
+        "--verify-command",
+        action="append",
+        default=[],
+        help="Command that must pass before finish; repeatable",
+    )
+    parser.add_argument("--verification-timeout", type=float, default=300)
     return parser
 
 
@@ -92,7 +107,13 @@ async def async_main(args: argparse.Namespace) -> int:
                                mcp_config=json.loads(Path(args.mcp_config).read_text(encoding="utf-8")) if args.mcp_config else {},
                                skill_roots=args.skill_root, auto_memory=args.auto_memory,
                                max_runtime=args.max_runtime, model_timeout=args.model_timeout,
-                               max_workers=args.max_workers, child_max_steps=args.child_max_steps),
+                               max_workers=args.max_workers, child_max_steps=args.child_max_steps,
+                               verification=VerificationPolicy(
+                                   require_patch=args.require_patch,
+                                   commands=args.verify_command,
+                                   command_timeout=args.verification_timeout,
+                                   require_todos_complete=args.require_todos_complete,
+                               )),
     )
     result = await agent.run(args.task, instance_id=args.instance_id, event_callback=console_event)
     print(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))

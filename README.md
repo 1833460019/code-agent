@@ -25,6 +25,15 @@ python scripts/run_agent.py --workspace C:/repos/example --task "修复失败的
 
 `--workspace` 应为单独的 Git checkout，不能是 Agent 项目自身或包含它的父目录。Linux/macOS 激活虚拟环境用 `source .venv/bin/activate`。支持 Anthropic、OpenAI-compatible 与 SiliconFlow；SiliconFlow 使用 `--provider siliconflow --model MODEL_ID` 以及本地 `SILICONFLOW_API_KEY`，默认 Base URL 为 `https://api.siliconflow.cn/v1`。也可通过 `Model` 接口扩展其他供应商。
 
+可要求 Agent 必须产生真实补丁且验证命令通过后才能结束：
+
+```bash
+python scripts/run_agent.py --workspace /path/to/repo --task "Fix the bug" --model MODEL_ID \
+  --require-patch --verify-command "python -m unittest" --verify-command "git diff --check"
+```
+
+每次 `finish` 尝试都会写入 `verification.json`，记录 diff 哈希、命令退出码和有界输出；验证失败时 Agent 会继续修复，而不是把口头完成当作成功。
+
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 
 常用选项：

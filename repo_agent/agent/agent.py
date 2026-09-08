@@ -16,6 +16,7 @@ from ..permissions import PermissionPolicy
 from ..prompts import load_coding_agent_prompt
 from ..runtime import Runtime
 from ..schemas import AgentRunResult, Message
+from ..verification import VerificationPolicy
 from .loop import AgentLoop
 from .state import AgentState
 
@@ -41,6 +42,7 @@ class RepoAgentConfig:
     skill_roots: list[str] = field(default_factory=list)
     mcp_config: dict = field(default_factory=dict)
     require_git: bool = True
+    verification: VerificationPolicy = field(default_factory=VerificationPolicy)
 
 
 class RepoAgent:
@@ -67,6 +69,7 @@ class RepoAgent:
         if min(self.config.max_runtime, self.config.model_timeout, self.config.context_soft_limit_chars,
                self.config.tool_output_limit_chars) <= 0:
             raise ValueError("Time and context budgets must be positive")
+        self.config.verification.validate()
         for path in (Path(self.config.runs_dir).expanduser().resolve(), self.state_root):
             if path.is_relative_to(self.environment.workspace):
                 raise ValueError("runs_dir and state_dir must be outside the target workspace")
@@ -123,7 +126,8 @@ class RepoAgent:
                                     total_tool_calls=state.total_tool_calls, input_tokens=inputs,
                                     output_tokens=outputs, total_tokens=inputs + outputs,
                                     runtime=time.perf_counter() - started, run_dir=str(recorder.run_dir),
-                                    termination_reason=reason, error=error)
+                                    termination_reason=reason, error=error,
+                                    verification=runtime.last_verification or {})
             data = result.to_dict()
             data["children"] = runtime.child_results
             data["aggregate_input_tokens"] = inputs + sum(c["input_tokens"] for c in runtime.child_results)

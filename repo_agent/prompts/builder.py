@@ -22,6 +22,19 @@ class PromptBuilder:
                             "Delegate bounded tasks to subagents, use isolated worktrees for teammates, "
                             "and wait for required background/team results before finish. Task completion "
                             "does not imply test success. Team patches are isolated until worktree_merge.")
+        verification = runtime.config.verification
+        if verification.require_patch or verification.commands or verification.require_todos_complete:
+            sections.append(
+                "The finish tool enforces this verification policy: "
+                + json.dumps(
+                    {
+                        "require_patch": verification.require_patch,
+                        "commands": verification.commands,
+                        "require_todos_complete": verification.require_todos_complete,
+                    },
+                    ensure_ascii=False,
+                )
+            )
         if runtime.features.skills:
             catalog = [{k: s[k] for k in ("name", "description")} for s in runtime.skills.discover()]
             sections.append("Available skills (load_skill to read): " + json.dumps(catalog, ensure_ascii=False))

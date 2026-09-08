@@ -10,7 +10,13 @@ from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from repo_agent import DockerEnvironment, LocalEnvironment, RepoAgent, RepoAgentConfig
+from repo_agent import (
+    DockerEnvironment,
+    LocalEnvironment,
+    RepoAgent,
+    RepoAgentConfig,
+    VerificationPolicy,
+)
 from repo_agent.benchmarks.swebench import SWEbenchAdapter, load_task
 from repo_agent.models.factory import create_model
 from scripts.common import DEFAULT_RUNS_DIR, ensure_external_workspace
@@ -32,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--environment", choices=["local", "docker"], default="local")
     parser.add_argument("--docker-image")
     parser.add_argument("--runs-dir", default=str(DEFAULT_RUNS_DIR))
+    parser.add_argument("--verify-command", action="append", default=[])
     return parser
 
 
@@ -55,7 +62,12 @@ async def async_main(args: argparse.Namespace) -> int:
     agent = RepoAgent(
         model=model,
         environment=environment,
-        config=RepoAgentConfig(max_steps=args.max_steps, runs_dir=args.runs_dir, profile="baseline"),
+        config=RepoAgentConfig(
+            max_steps=args.max_steps,
+            runs_dir=args.runs_dir,
+            profile="baseline",
+            verification=VerificationPolicy(require_patch=True, commands=args.verify_command),
+        ),
     )
     adapter = SWEbenchAdapter(environment)
     result = await adapter.run(task, agent, event_callback=console_event)
