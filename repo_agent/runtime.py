@@ -53,6 +53,7 @@ class Runtime:
         self.child_results = []
         self.verification_attempts: list[dict] = []
         self.last_verification: dict | None = None
+        self.current_step = 0
         self.tools = self._tools()
 
     async def start(self):
@@ -84,6 +85,24 @@ class Runtime:
         if tool is None:
             raise KeyError(f"Unknown tool: {name}")
         Draft202012Validator(tool.input_schema).validate(arguments)
+        limit = self.config.max_exploration_steps
+        if limit is not None and self.current_step > limit and name not in {
+            "edit_file", "write_file", "finish"
+        }:
+            try:
+                patch = await asyncio.to_thread(self.environment.get_diff)
+            except Exception:
+                patch = ""
+            if not patch.strip():
+                self.recorder.event(
+                    "exploration_blocked", step=self.current_step, tool_name=name, limit=limit
+                )
+                return ToolResult(
+                    False,
+                    f"Exploration budget exhausted after {limit} model steps and the workspace "
+                    "still has no patch. Use edit_file or write_file now to implement the smallest "
+                    "likely source fix. Reading, searching, and shell commands resume after a patch exists.",
+                )
         await self.policy.check(name, arguments)
         if self.parent and not self.teams.can_write(self.name) and name not in {
             "read_file", "list_files", "grep_files", "inbox", "send_message", "submit_plan",
@@ -173,6 +192,7 @@ class Runtime:
         )
 
     async def before_step(self, state):
+        self.current_step = state.step
         if self.features.background:
             for note in self.background.drain():
                 self.recorder.event("background_notification", result=note)

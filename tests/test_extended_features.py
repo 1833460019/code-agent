@@ -9,10 +9,11 @@ from repo_agent.logging.trajectory import TrajectoryRecorder
 from repo_agent.permissions import PermissionPolicy, PermissionRule
 from repo_agent.scheduler import CronScheduler
 from repo_agent.schemas import Message, ModelResponse, Usage
+from repo_agent.verification import VerificationPolicy
 from repo_agent.teams import TeamManager
 from repo_agent.tasks import TaskStore
 from repo_agent.worktrees import WorktreeManager
-from tests.support import WorkspaceCase, SequenceModel, call
+from tests.support import WorkspaceCase, SequenceModel, call, observations
 
 
 class ExtendedFeaturesTests(WorkspaceCase):
@@ -89,6 +90,25 @@ class ExtendedFeaturesTests(WorkspaceCase):
         self.assertNotIn("Execution budget warning", model.requests[0]["system_prompt"])
         self.assertIn("Implement the smallest likely source fix now", model.requests[1]["system_prompt"])
         self.assertIn("Final-step priority", model.requests[1]["system_prompt"])
+
+    def test_exploration_limit_requires_patch_before_more_inspection(self):
+        model = SequenceModel([
+            call("read_file", path="base.txt"),
+            call("read_file", path="base.txt"),
+            call("edit_file", path="base.txt", old_text="base", new_text="fixed"),
+            call("shell", command=f'"{sys.executable}" -c "print(\'verified\')"'),
+            call("finish", summary="fixed"),
+        ])
+        result = asyncio.run(self.agent(
+            model,
+            max_steps=5,
+            max_exploration_steps=1,
+            verification=VerificationPolicy(require_patch=True),
+        ).run("Fix the issue"))
+        self.assertEqual(result.status, "success", result.error)
+        self.assertIn("Exploration budget exhausted", observations(model.requests[-1]["messages"], "read_file")[1])
+        self.assertEqual((self.repo / "base.txt").read_text(encoding="utf-8"), "fixed\n")
+        self.assertIn("verified", observations(model.requests[-1]["messages"], "shell")[0])
 
     def test_context_error_recovers_without_orphan_tool_results(self):
         history = [Message(role="user", content="issue")] + [Message(role="user", content="x" * 600) for _ in range(8)]

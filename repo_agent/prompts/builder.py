@@ -61,6 +61,13 @@ class PromptBuilder:
                 "Implement the smallest likely source fix now, then run focused verification and finish. "
                 "Do not spend the remaining budget repeatedly reading or searching the same areas."
             )
+        exploration_limit = runtime.config.max_exploration_steps
+        if exploration_limit is not None:
+            sections.append(
+                f"Exploration hard limit: the first {exploration_limit} model steps may inspect freely. "
+                "If no workspace patch exists after that limit, read/search/shell tools are blocked until "
+                "you use edit_file or write_file. Plan the investigation accordingly."
+            )
         if remaining <= 2:
             sections.append(
                 "Final-step priority: produce a valid source patch and call finish. Avoid creating scratch "

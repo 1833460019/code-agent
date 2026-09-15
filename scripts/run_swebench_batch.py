@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key")
     parser.add_argument("--base-url")
     parser.add_argument("--max-steps", type=int, default=50)
+    parser.add_argument("--max-exploration-steps", type=int)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--max-runtime", type=float, default=1800)
     parser.add_argument("--workers", type=int, default=1)
@@ -46,11 +47,15 @@ async def async_main(args: argparse.Namespace) -> int:
             raise ValueError("Unknown instances: " + ", ".join(sorted(missing)))
     if args.limit:
         tasks = tasks[: args.limit]
+    exploration_steps = args.max_exploration_steps
+    if exploration_steps is None and args.max_steps > 1:
+        exploration_steps = max(1, int(args.max_steps * 0.6))
     config = {
         "task_file": str(Path(args.task_file).resolve()),
         "provider": args.provider,
         "model": args.model,
         "max_steps": args.max_steps,
+        "max_exploration_steps": exploration_steps,
         "max_tokens": args.max_tokens,
         "verify_commands": args.verify_command,
     }
@@ -81,6 +86,7 @@ async def async_main(args: argparse.Namespace) -> int:
                     environment=environment,
                     config=RepoAgentConfig(
                         max_steps=args.max_steps,
+                        max_exploration_steps=exploration_steps,
                         max_runtime=args.max_runtime,
                         profile="baseline",
                         permission_mode="trusted",

@@ -26,6 +26,7 @@ from .state import AgentState
 @dataclass(slots=True)
 class RepoAgentConfig:
     max_steps: int = 50
+    max_exploration_steps: int | None = None
     context_soft_limit_chars: int = 120_000
     tool_output_limit_chars: int = 30_000
     runs_dir: str | Path = "runs"
@@ -74,6 +75,10 @@ class RepoAgent:
             raise ValueError("problem_statement must not be empty")
         if min(self.config.max_steps, self.config.child_max_steps, self.config.max_workers, self.config.model_attempts) < 1:
             raise ValueError("Step, worker and model attempt budgets must be positive")
+        if self.config.max_exploration_steps is not None and not (
+            1 <= self.config.max_exploration_steps < self.config.max_steps
+        ):
+            raise ValueError("max_exploration_steps must be positive and lower than max_steps")
         if min(self.config.max_runtime, self.config.model_timeout, self.config.context_soft_limit_chars,
                self.config.tool_output_limit_chars) <= 0:
             raise ValueError("Time and context budgets must be positive")
