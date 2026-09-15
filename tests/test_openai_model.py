@@ -36,7 +36,13 @@ class OpenAIModelTests(__import__("unittest").TestCase):
 
     def test_complete_returns_native_tool_call_and_usage(self):
         async def run():
-            model = OpenAIModel("test", api_key="dummy", base_url="https://example.invalid/v1", max_tokens=123)
+            model = OpenAIModel(
+                "test",
+                api_key="dummy",
+                base_url="https://example.invalid/v1",
+                max_tokens=123,
+                extra_body={"enable_thinking": True, "reasoning_effort": "xhigh"},
+            )
             completions = FakeCompletions()
             model.client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
             result = await model.complete(
@@ -48,5 +54,9 @@ class OpenAIModelTests(__import__("unittest").TestCase):
             self.assertEqual(result.usage.total_tokens, 19)
             self.assertEqual(completions.request["max_tokens"], 123)
             self.assertEqual(completions.request["tools"][0]["type"], "function")
+            self.assertEqual(
+                completions.request["extra_body"],
+                {"enable_thinking": True, "reasoning_effort": "xhigh"},
+            )
 
         __import__("asyncio").run(run())

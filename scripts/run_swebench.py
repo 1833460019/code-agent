@@ -35,6 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", "--max_steps", type=int, default=50)
     parser.add_argument("--max-exploration-steps", type=int)
     parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument("--enable-thinking", action="store_true")
+    parser.add_argument("--reasoning-effort", choices=["low", "medium", "high", "xhigh"])
     parser.add_argument("--command-timeout", type=float, default=120.0)
     parser.add_argument("--environment", choices=["local", "docker"], default="local")
     parser.add_argument("--docker-image")
@@ -62,6 +64,8 @@ async def async_main(args: argparse.Namespace) -> int:
         api_key=args.api_key,
         base_url=args.base_url,
         max_tokens=args.max_tokens,
+        enable_thinking=True if args.enable_thinking else None,
+        reasoning_effort=args.reasoning_effort,
     )
     agent = RepoAgent(
         model=model,

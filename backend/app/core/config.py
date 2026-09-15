@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     max_agent_steps: int = Field(default=20, alias="MAX_AGENT_STEPS")
     max_tokens: int = Field(default=4096, alias="MAX_TOKENS")
+    enable_thinking: bool = Field(default=False, alias="ENABLE_THINKING")
+    reasoning_effort: str | None = Field(default=None, alias="REASONING_EFFORT")
     context_soft_limit_chars: int = Field(default=120_000, alias="CONTEXT_SOFT_LIMIT_CHARS")
     tool_output_limit_chars: int = Field(default=24_000, alias="TOOL_OUTPUT_LIMIT_CHARS")
     command_timeout_seconds: int = Field(default=60, alias="COMMAND_TIMEOUT_SECONDS")

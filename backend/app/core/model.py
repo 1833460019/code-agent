@@ -26,4 +26,6 @@ def create_model_adapter(settings):
         return MockModelAdapter()
     return create_model(provider=provider, model=settings.model_id,
                         api_key=api_key, base_url=base_url,
-                        max_tokens=settings.max_tokens)
+                        max_tokens=settings.max_tokens,
+                        enable_thinking=True if settings.enable_thinking else None,
+                        reasoning_effort=settings.reasoning_effort)

@@ -138,6 +138,8 @@ class LocalEnvironment(Environment):
     def edit_file(self, path: str | Path, old_text: str, new_text: str) -> None:
         if not old_text:
             raise EnvironmentError("old_text must not be empty")
+        if old_text == new_text:
+            raise EnvironmentError("old_text and new_text must differ")
         target = self.resolve_path(path)
         with target.open(encoding="utf-8", newline="") as handle:
             content = handle.read()

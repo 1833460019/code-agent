@@ -20,6 +20,8 @@ class LocalEnvironmentTest(unittest.TestCase):
             self.assertEqual(environment.read_file("nested/example.txt"), "before")
             environment.edit_file("nested/example.txt", "before", "after")
             self.assertEqual(environment.read_file("nested/example.txt"), "after")
+            with self.assertRaisesRegex(EnvironmentError, "must differ"):
+                environment.edit_file("nested/example.txt", "after", "after")
             with self.assertRaises(EnvironmentError):
                 environment.read_file("../outside.txt")
             with self.assertRaises(EnvironmentError):

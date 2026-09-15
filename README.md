@@ -46,6 +46,8 @@ python scripts/run_swebench_batch.py --task-file swebench-lite-dev.json \
   --max-exploration-steps 20
 ```
 
+支持硅基流动推理模式参数，例如 V4-Pro Think Max 使用 `--enable-thinking --reasoning-effort xhigh`；具体支持范围和计费以供应商当前文档为准。
+
 批处理为每个实例准备独立、精确定位到 `base_commit` 的干净 checkout；`manifest.json` 原子记录状态，重启后自动跳过已完成任务，`predictions.jsonl` 可直接交给官方 SWE-bench harness。
 需要产生补丁的 SWE-bench 入口默认把 60% 步数作为探索预算；若到期仍未修改 Git 已跟踪文件，会暂停继续读取、搜索和 Shell，直到模型通过文件工具写出候选修复。无关的未跟踪复现文件不能解除门禁；可用 `--max-exploration-steps` 调整该门限。
 

@@ -27,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--max-exploration-steps", type=int)
     parser.add_argument("--max-tokens", type=int, default=4096)
+    parser.add_argument("--enable-thinking", action="store_true")
+    parser.add_argument("--reasoning-effort", choices=["low", "medium", "high", "xhigh"])
     parser.add_argument("--max-runtime", type=float, default=1800)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--limit", type=int)
@@ -57,6 +59,8 @@ async def async_main(args: argparse.Namespace) -> int:
         "max_steps": args.max_steps,
         "max_exploration_steps": exploration_steps,
         "max_tokens": args.max_tokens,
+        "enable_thinking": args.enable_thinking,
+        "reasoning_effort": args.reasoning_effort,
         "verify_commands": args.verify_command,
     }
     store = BatchStore(args.output_dir, config=config)
@@ -79,6 +83,8 @@ async def async_main(args: argparse.Namespace) -> int:
                     api_key=args.api_key,
                     base_url=args.base_url,
                     max_tokens=args.max_tokens,
+                    enable_thinking=True if args.enable_thinking else None,
+                    reasoning_effort=args.reasoning_effort,
                 )
                 environment = LocalEnvironment(workspace)
                 agent = RepoAgent(

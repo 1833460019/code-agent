@@ -19,6 +19,7 @@ class OpenAIModel(Model):
         api_key: str | None = None,
         base_url: str | None = None,
         max_tokens: int = 4096,
+        extra_body: dict[str, Any] | None = None,
     ):
         kwargs: dict[str, Any] = {}
         if api_key:
@@ -30,6 +31,7 @@ class OpenAIModel(Model):
         self.client = AsyncOpenAI(**kwargs)
         self._name = model
         self.max_tokens = max_tokens
+        self.extra_body = dict(extra_body or {})
 
     @property
     def name(self) -> str:
@@ -42,13 +44,16 @@ class OpenAIModel(Model):
         messages: list[Message],
         tools: list[dict],
     ) -> ModelResponse:
-        response = await self.client.chat.completions.create(
+        request: dict[str, Any] = dict(
             model=self.name,
             max_tokens=self.max_tokens,
             messages=[{"role": "system", "content": system_prompt}, *_to_openai_messages(messages)],
             tools=[_to_openai_tool(tool) for tool in tools] or None,
             tool_choice="auto" if tools else None,
         )
+        if self.extra_body:
+            request["extra_body"] = self.extra_body
+        response = await self.client.chat.completions.create(**request)
         choice = response.choices[0]
         tool_calls = []
         for call in choice.message.tool_calls or []:

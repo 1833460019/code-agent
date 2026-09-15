@@ -12,6 +12,8 @@ def create_model(
     api_key: str | None = None,
     base_url: str | None = None,
     max_tokens: int = 4096,
+    enable_thinking: bool | None = None,
+    reasoning_effort: str | None = None,
 ) -> Model:
     if provider.lower() == "anthropic":
         from .anthropic_model import AnthropicModel
@@ -26,6 +28,11 @@ def create_model(
         from .openai_model import OpenAIModel
 
         siliconflow = provider.lower() == "siliconflow"
+        extra_body = {}
+        if siliconflow and enable_thinking is not None:
+            extra_body["enable_thinking"] = enable_thinking
+        if siliconflow and reasoning_effort:
+            extra_body["reasoning_effort"] = reasoning_effort
         return OpenAIModel(
             model,
             api_key=api_key or os.getenv("SILICONFLOW_API_KEY" if siliconflow else "OPENAI_API_KEY")
@@ -34,6 +41,7 @@ def create_model(
             or os.getenv("OPENAI_BASE_URL")
             or ("https://api.siliconflow.cn/v1" if siliconflow else None),
             max_tokens=max_tokens,
+            extra_body=extra_body,
         )
     raise ValueError(
         f"Unsupported provider {provider!r}. Implement repo_agent.models.base.Model "
