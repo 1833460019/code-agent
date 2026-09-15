@@ -47,7 +47,7 @@ python scripts/run_swebench_batch.py --task-file swebench-lite-dev.json \
 ```
 
 批处理为每个实例准备独立、精确定位到 `base_commit` 的干净 checkout；`manifest.json` 原子记录状态，重启后自动跳过已完成任务，`predictions.jsonl` 可直接交给官方 SWE-bench harness。
-需要产生补丁的 SWE-bench 入口默认把 60% 步数作为探索预算；若到期仍无 diff，会暂停继续读取、搜索和 Shell，直到模型通过文件工具写出候选修复。可用 `--max-exploration-steps` 调整该门限。
+需要产生补丁的 SWE-bench 入口默认把 60% 步数作为探索预算；若到期仍未修改 Git 已跟踪文件，会暂停继续读取、搜索和 Shell，直到模型通过文件工具写出候选修复。无关的未跟踪复现文件不能解除门禁；可用 `--max-exploration-steps` 调整该门限。
 
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 

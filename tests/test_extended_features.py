@@ -94,6 +94,7 @@ class ExtendedFeaturesTests(WorkspaceCase):
     def test_exploration_limit_requires_patch_before_more_inspection(self):
         model = SequenceModel([
             call("read_file", path="base.txt"),
+            call("write_file", path="unblock.txt", content="not an implementation"),
             call("read_file", path="base.txt"),
             call("edit_file", path="base.txt", old_text="base", new_text="fixed"),
             call("shell", command=f'"{sys.executable}" -c "print(\'verified\')"'),
@@ -101,12 +102,13 @@ class ExtendedFeaturesTests(WorkspaceCase):
         ])
         result = asyncio.run(self.agent(
             model,
-            max_steps=5,
+            max_steps=6,
             max_exploration_steps=1,
             verification=VerificationPolicy(require_patch=True),
         ).run("Fix the issue"))
         self.assertEqual(result.status, "success", result.error)
         self.assertIn("Exploration budget exhausted", observations(model.requests[-1]["messages"], "read_file")[1])
+        self.assertTrue((self.repo / "unblock.txt").is_file())
         self.assertEqual((self.repo / "base.txt").read_text(encoding="utf-8"), "fixed\n")
         self.assertIn("verified", observations(model.requests[-1]["messages"], "shell")[0])
 

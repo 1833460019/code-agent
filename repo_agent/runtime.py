@@ -89,11 +89,7 @@ class Runtime:
         if limit is not None and self.current_step > limit and name not in {
             "edit_file", "write_file", "finish"
         }:
-            try:
-                patch = await asyncio.to_thread(self.environment.get_diff)
-            except Exception:
-                patch = ""
-            if not patch.strip():
+            if not await self._has_tracked_implementation_patch():
                 self.recorder.event(
                     "exploration_blocked", step=self.current_step, tool_name=name, limit=limit
                 )
@@ -101,7 +97,8 @@ class Runtime:
                     False,
                     f"Exploration budget exhausted after {limit} model steps and the workspace "
                     "still has no patch. Use edit_file or write_file now to implement the smallest "
-                    "likely source fix. Reading, searching, and shell commands resume after a patch exists.",
+                    "likely source fix in a tracked file. Reading, searching, and shell commands resume "
+                    "after a tracked implementation patch exists.",
                 )
         await self.policy.check(name, arguments)
         if self.parent and not self.teams.can_write(self.name) and name not in {
@@ -122,6 +119,21 @@ class Runtime:
             result.metadata["verification"] = self.last_verification
         await self.hooks.emit("after_tool", payload | {"result": result})
         return result
+
+    async def _has_tracked_implementation_patch(self) -> bool:
+        """Ignore untracked scratch files when deciding whether implementation began."""
+        git = getattr(self.environment, "git", None)
+        base = getattr(self.environment, "base_commit", None)
+        if callable(git) and base:
+            try:
+                result = await asyncio.to_thread(git, "diff", "--quiet", base, "--", ".")
+                return result.returncode == 1
+            except Exception:
+                return False
+        try:
+            return bool((await asyncio.to_thread(self.environment.get_diff)).strip())
+        except Exception:
+            return False
 
     async def _verify_finish(self) -> ToolResult:
         policy = self.config.verification

@@ -65,8 +65,9 @@ class PromptBuilder:
         if exploration_limit is not None:
             sections.append(
                 f"Exploration hard limit: the first {exploration_limit} model steps may inspect freely. "
-                "If no workspace patch exists after that limit, read/search/shell tools are blocked until "
-                "you use edit_file or write_file. Plan the investigation accordingly."
+                "If no tracked-file patch exists after that limit, read/search/shell tools are blocked "
+                "until you edit tracked implementation code. Untracked scratch files do not unlock the "
+                "tools. Plan the investigation accordingly."
             )
         if remaining <= 2:
             sections.append(
