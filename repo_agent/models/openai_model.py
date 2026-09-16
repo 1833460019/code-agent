@@ -64,6 +64,7 @@ class OpenAIModel(Model):
         usage = response.usage
         return ModelResponse(
             content=choice.message.content or "",
+            reasoning_content=getattr(choice.message, "reasoning_content", None),
             tool_calls=tool_calls,
             stop_reason=choice.finish_reason,
             usage=Usage(
@@ -91,6 +92,8 @@ def _to_openai_messages(messages: list[Message]) -> list[dict[str, Any]]:
             converted.append({"role": "user", "content": message.content})
         elif message.role == "assistant":
             payload: dict[str, Any] = {"role": "assistant", "content": message.content or None}
+            if message.reasoning_content is not None:
+                payload["reasoning_content"] = message.reasoning_content
             if message.tool_calls:
                 payload["tool_calls"] = [
                     {

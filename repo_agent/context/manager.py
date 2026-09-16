@@ -19,6 +19,8 @@ class ContextManager:
         prepared = copy.deepcopy(messages)
         if not prepared:
             return prepared
+        if self._size(prepared) <= self.soft_limit_chars:
+            return prepared
         # Micro-compaction: shorten older observations, keeping protocol pairs intact.
         for message in prepared[1:-4]:
             if message.role == "tool" and message.tool_name in {"shell", "read_file", "grep_files", "artifact_read"} and len(message.content) > 1000:
@@ -69,6 +71,7 @@ class ContextManager:
     def _size(messages: list[Message]) -> int:
         return sum(
             len(message.content)
+            + len(message.reasoning_content or "")
             + sum(len(call.name) + len(str(call.arguments)) for call in message.tool_calls)
             + 80
             for message in messages

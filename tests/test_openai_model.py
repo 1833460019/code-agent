@@ -12,7 +12,7 @@ class FakeCompletions:
     async def create(self, **kwargs):
         self.request = kwargs
         function = SimpleNamespace(name="write_file", arguments=json.dumps({"path": "ok.txt", "content": "ok"}))
-        message = SimpleNamespace(content="working", tool_calls=[SimpleNamespace(id="call-1", function=function)])
+        message = SimpleNamespace(content="working", reasoning_content="provider-state", tool_calls=[SimpleNamespace(id="call-1", function=function)])
         return SimpleNamespace(
             choices=[SimpleNamespace(message=message, finish_reason="tool_calls")],
             usage=SimpleNamespace(prompt_tokens=12, completion_tokens=7),
@@ -52,6 +52,9 @@ class OpenAIModelTests(__import__("unittest").TestCase):
             )
             self.assertEqual(result.tool_calls[0].arguments["path"], "ok.txt")
             self.assertEqual(result.usage.total_tokens, 19)
+            replay = _to_openai_messages([Message(role="assistant", content=result.content,
+                tool_calls=result.tool_calls, reasoning_content=result.reasoning_content)])
+            self.assertEqual(replay[0]["reasoning_content"], "provider-state")
             self.assertEqual(completions.request["max_tokens"], 123)
             self.assertEqual(completions.request["tools"][0]["type"], "function")
             self.assertEqual(

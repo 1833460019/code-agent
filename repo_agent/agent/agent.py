@@ -26,6 +26,7 @@ from .state import AgentState
 @dataclass(slots=True)
 class RepoAgentConfig:
     max_steps: int = 50
+    max_total_tokens: int | None = None
     max_exploration_steps: int | None = None
     context_soft_limit_chars: int = 120_000
     tool_output_limit_chars: int = 30_000
@@ -83,6 +84,8 @@ class RepoAgent:
                self.config.tool_output_limit_chars) <= 0:
             raise ValueError("Time and context budgets must be positive")
         self.config.verification.validate()
+        if self.config.max_total_tokens is not None and self.config.max_total_tokens < 1:
+            raise ValueError("max_total_tokens must be positive")
         if self.config.checkpoint_lease_seconds <= 0:
             raise ValueError("checkpoint_lease_seconds must be positive")
         for path in (Path(self.config.runs_dir).expanduser().resolve(), self.state_root):

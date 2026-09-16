@@ -49,8 +49,6 @@ async def async_main(args: argparse.Namespace) -> int:
     task = load_task(args.task_file, instance_id=args.instance_id)
     ensure_external_workspace(args.workspace)
     exploration_steps = args.max_exploration_steps
-    if exploration_steps is None and args.max_steps > 1:
-        exploration_steps = max(1, int(args.max_steps * 0.6))
     if args.environment == "docker":
         if not args.docker_image:
             raise ValueError("--docker-image is required for Docker execution")

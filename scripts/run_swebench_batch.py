@@ -30,6 +30,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--enable-thinking", action="store_true")
     parser.add_argument("--reasoning-effort", choices=["low", "medium", "high", "xhigh"])
     parser.add_argument("--max-runtime", type=float, default=1800)
+    parser.add_argument("--model-timeout", type=float, default=300)
+    parser.add_argument("--max-total-tokens", type=int, default=2000000)
+    parser.add_argument("--context-soft-limit-chars", type=int, default=800000)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--instance-id", action="append", default=[])
@@ -50,8 +53,6 @@ async def async_main(args: argparse.Namespace) -> int:
     if args.limit:
         tasks = tasks[: args.limit]
     exploration_steps = args.max_exploration_steps
-    if exploration_steps is None and args.max_steps > 1:
-        exploration_steps = max(1, int(args.max_steps * 0.6))
     config = {
         "task_file": str(Path(args.task_file).resolve()),
         "provider": args.provider,
@@ -62,6 +63,10 @@ async def async_main(args: argparse.Namespace) -> int:
         "enable_thinking": args.enable_thinking,
         "reasoning_effort": args.reasoning_effort,
         "verify_commands": args.verify_command,
+        "model_timeout": args.model_timeout,
+        "max_total_tokens": args.max_total_tokens,
+        "max_runtime": args.max_runtime,
+        "context_soft_limit_chars": args.context_soft_limit_chars,
     }
     store = BatchStore(args.output_dir, config=config)
     pool = WorkspacePool(args.workspace_root)
@@ -94,6 +99,9 @@ async def async_main(args: argparse.Namespace) -> int:
                         max_steps=args.max_steps,
                         max_exploration_steps=exploration_steps,
                         max_runtime=args.max_runtime,
+                        model_timeout=args.model_timeout,
+                        max_total_tokens=args.max_total_tokens,
+                        context_soft_limit_chars=args.context_soft_limit_chars,
                         profile="baseline",
                         permission_mode="trusted",
                         runs_dir=Path(args.output_dir) / "runs",

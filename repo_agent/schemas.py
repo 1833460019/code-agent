@@ -30,6 +30,7 @@ class ModelResponse:
     tool_calls: list[ToolCall] = field(default_factory=list)
     stop_reason: str | None = None
     usage: Usage = field(default_factory=Usage)
+    reasoning_content: str | None = None
 
 
 @dataclass(slots=True)
@@ -40,6 +41,7 @@ class Message:
     tool_call_id: str | None = None
     tool_name: str | None = None
     is_error: bool = False
+    reasoning_content: str | None = None
 
 
 @dataclass(slots=True)

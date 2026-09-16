@@ -22,6 +22,9 @@ class AgentLoop:
         messages = state.messages
         for step in range(state.step + 1, rt.config.max_steps + 1):
             await asyncio.sleep(0)
+            consumed = state.input_tokens + state.output_tokens + rec.aux_input_tokens + rec.aux_output_tokens
+            if rt.config.max_total_tokens is not None and consumed >= rt.config.max_total_tokens:
+                return "terminated", "max_total_tokens", None
             state.step = step
             stop = await rt.before_step(state)
             if stop:
@@ -56,7 +59,8 @@ class AgentLoop:
             latency = time.perf_counter() - model_started
             state.input_tokens += response.usage.input_tokens
             state.output_tokens += response.usage.output_tokens
-            messages.append(Message(role="assistant", content=response.content, tool_calls=response.tool_calls))
+            messages.append(Message(role="assistant", content=response.content, tool_calls=response.tool_calls,
+                                    reasoning_content=response.reasoning_content))
             record = dict(step=step, assistant_response=response.content, model=model_name,
                           stop_reason=response.stop_reason, latency=latency,
                           token_usage=asdict(response.usage) | {"total_tokens": response.usage.total_tokens}, tool_calls=[])

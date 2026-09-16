@@ -49,7 +49,7 @@ python scripts/run_swebench_batch.py --task-file swebench-lite-dev.json \
 支持硅基流动推理模式参数，例如 V4-Pro Think Max 使用 `--enable-thinking --reasoning-effort xhigh`；具体支持范围和计费以供应商当前文档为准。
 
 批处理为每个实例准备独立、精确定位到 `base_commit` 的干净 checkout；`manifest.json` 原子记录状态，重启后自动跳过已完成任务，`predictions.jsonl` 可直接交给官方 SWE-bench harness。
-需要产生补丁的 SWE-bench 入口默认把 60% 步数作为探索预算；若到期仍未修改 Git 已跟踪文件，会暂停继续读取、搜索和 Shell，直到模型通过文件工具写出候选修复。无关的未跟踪复现文件不能解除门禁；可用 `--max-exploration-steps` 调整该门限。
+SWE-bench 默认不强制限制探索阶段；`--max-exploration-steps` 是可选实验开关，可能诱导模型提前做无效修改。批处理通过 `--max-total-tokens`（默认 200 万累计输入输出 Token）、`--max-runtime` 和 `--max-steps` 控制总预算；Token 在模型调用边界检查，最后一次请求可能超过门限。`--model-timeout` 默认 300 秒，`--context-soft-limit-chars` 默认 80 万字符。预算内保留完整工具结果，并在工具调用间回传供应商的推理字段。
 
 CLI 默认 `full + ask`：读取工具直接执行，变更、Shell 和外部工具在终端逐次审批。非交互输入无法审批时默认拒绝。只有你明确信任目标仓库与命令时才使用 `--permission-mode trusted`。
 

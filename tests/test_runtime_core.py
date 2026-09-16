@@ -10,6 +10,22 @@ from tests.support import WorkspaceCase, SequenceModel, call
 
 
 class RuntimeCoreTests(WorkspaceCase):
+    def test_context_preserves_file_body_when_within_budget(self):
+        messages = [Message(role="user", content="issue")]
+        for i in range(5):
+            messages.extend([
+                Message(role="assistant", tool_calls=[ToolCall(str(i), "read_file", {"path": "x"})],
+                        reasoning_content="retained provider state"),
+                Message(role="tool", content="x" * 4000 + "IMPORTANT_IMPLEMENTATION", tool_name="read_file", tool_call_id=str(i)),
+            ])
+        self.assertEqual(ContextManager(soft_limit_chars=50000).prepare(messages), messages)
+
+    def test_total_token_budget_stops_before_next_model_request(self):
+        model = SequenceModel([call("read_file", path="base.txt"), call("finish", summary="done")])
+        result = asyncio.run(self.agent(model, max_total_tokens=15).run("Inspect"))
+        self.assertEqual(result.termination_reason, "max_total_tokens")
+        self.assertEqual(len(model.requests), 1)
+
     def test_staged_and_committed_changes_are_in_patch(self):
         env = self.agent(SequenceModel([])).environment
         env.write_file("base.txt", "changed\n")
