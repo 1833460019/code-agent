@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import threading
+import uuid
 from pathlib import Path
 
 from ...storage import atomic_json, atomic_text
@@ -33,19 +34,17 @@ class WorkspacePool:
             if not mirror.exists():
                 self._git(self.cache, "clone", "--mirror", f"https://github.com/{task.repo}.git", mirror.name)
             target = self.tasks / _safe_name(task.instance_id)
-            if not target.exists():
-                self._git(self.tasks, "clone", "--no-checkout", str(mirror), target.name)
-                self._git(target, "checkout", "--detach", task.base_commit)
-            else:
+            if target.exists():
                 resolved_target = target.resolve()
                 if not resolved_target.is_relative_to(self.tasks):
                     raise RuntimeError(f"Benchmark workspace escaped task root: {resolved_target}")
-                # Task directories are disposable, isolated checkouts. A crashed or failed
-                # attempt may leave source edits and reproduction files behind; reset them
-                # before retrying so every attempt starts from the official base commit.
-                self._git(target, "reset", "--hard", task.base_commit)
-                self._git(target, "clean", "-fd")
-                self._git(target, "checkout", "--detach", task.base_commit)
+                archive = self.root / "attempts"
+                archive.mkdir(exist_ok=True)
+                target.rename(archive / f"{target.name}-{uuid.uuid4().hex}")
+            target.mkdir()
+            self._git(target, "init")
+            self._git(target, "fetch", "--depth=1", "--no-tags", str(mirror), task.base_commit)
+            self._git(target, "checkout", "--detach", "FETCH_HEAD")
             head = self._git(target, "rev-parse", "HEAD").stdout.strip()
             expected = self._git(target, "rev-parse", task.base_commit).stdout.strip()
             dirty = self._git(target, "status", "--porcelain").stdout.strip()

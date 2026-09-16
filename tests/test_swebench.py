@@ -84,6 +84,11 @@ class SWEbenchAdapterTest(unittest.TestCase):
             ).stdout.strip()
             cache = root / "cache"
             cache.mkdir()
+            (target / "answer.txt").write_text("future solution", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=target, check=True)
+            subprocess.run(["git", "commit", "-m", "future answer"], cwd=target, check=True, capture_output=True)
+            future = subprocess.run(["git", "rev-parse", "HEAD"], cwd=target, check=True,
+                                    capture_output=True, text=True).stdout.strip()
             subprocess.run(
                 ["git", "clone", "--mirror", str(target), str(cache / "demo__repo.git")],
                 check=True,
@@ -97,6 +102,11 @@ class SWEbenchAdapterTest(unittest.TestCase):
 
             self.assertEqual((prepared / "source.py").read_text(encoding="utf-8"), "original\n")
             self.assertFalse((prepared / "scratch.txt").exists())
+            self.assertFalse((prepared / "answer.txt").exists())
+            leaked = subprocess.run(["git", "cat-file", "-e", future], cwd=prepared, capture_output=True)
+            self.assertNotEqual(leaked.returncode, 0)
+            self.assertEqual(subprocess.run(["git", "rev-list", "--all", "--count"], cwd=prepared,
+                check=True, capture_output=True, text=True).stdout.strip(), "1")
         finally:
             shutil.rmtree(root, ignore_errors=True)
 
