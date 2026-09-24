@@ -187,4 +187,19 @@ cd frontend
 npm run build
 ```
 
-测试使用确定性的观察驱动模型，但真实执行本地 Git、文件操作、Shell、后台子进程、Worktree、团队子循环和 MCP stdio 子进程；另覆盖 Web 审批、断开取消及多轮历史。没有消耗真实模型 API，也没有声称任何 SWE-bench resolved rate。建议下一阶段固定真实模型/预算，运行官方基线并基于失败轨迹做消融实验。
+离线测试使用确定性的观察驱动模型，但真实执行本地 Git、文件操作、Shell、后台子进程、Worktree、团队子循环和 MCP stdio 子进程；另覆盖 Web 审批、断开取消及多轮历史。下方记录一次使用真实模型的本机实验，不能替代官方 SWE-bench 评测。
+
+### 2026-09-24 本机实测
+
+环境：Windows、Python 3.13.5、Node.js 24.14.0；真实模型为 SiliconFlow 的 `deepseek-ai/DeepSeek-V4-Pro`。API Key 仅放在 Git 忽略的本地 `backend/.env`，未纳入仓库。以下模型调用使用付费 API；运行记录位于项目目录外，未上传。
+
+| 范围 | 方法与结果 | 结论 |
+| --- | --- | --- |
+| 离线回归 | `python -m unittest discover -s tests -p 'test_*.py'`：65 项，64 通过、1 跳过；`coverage` 总行覆盖率 83%；`ruff check` 通过。 | 覆盖 20 章核心机制的确定性测试；本机没有 Docker，Docker 专项未执行。 |
+| 前端构建 | `frontend/` 下 `npm run build` 成功。 | TypeScript 检查与生产打包通过。 |
+| 模型连通 | 用限制为 128 输出 Token 的真实请求得到预期 `OK`，供应商返回 90 输入、27 输出 Token。 | 密钥、模型 ID 与 SiliconFlow 兼容接口可用；不等于 Agent 任务成功。 |
+| Web 与浏览器 | 独立临时 Git 仓库中，通过 `/api/chat`、`/api/chat/stream` 和浏览器页面完成 3 轮真实对话；SSE 返回 `session/user/assistant/tool_start/tool_result/done`，历史会话、工具轨迹、运行证据与验证信息可见。3 轮均调用 `finish`。 | 前后端链路可用，但第一轮精确任务**未通过**：要求 `hello.txt` 以 LF 结尾，实际文件只有 `HELLO_AGENT` 的 11 字节、末尾无 LF；Agent 仍口头声称已验证。Web 默认 finish 门禁没有测试命令，不能把 3/3 finish 当作任务正确率。 |
+| 强制验证与恢复 | 另一独立仓库提供 `test_exact.py`，断言文件字节等于 `b"HELLO_AGENT\n"`，CLI 设置 `--require-patch --verify-command "python -m unittest -q"`。首次运行在 8 步上限终止；从 checkpoint 恢复后第 11 步修正文件，1 项测试通过，finish 门禁记录命令退出码 0 并接受。 | 验证门禁能阻止未经测试的口头完成；该临时仓库缺少 `.gitignore`，运行生成的 `__pycache__` 也进入演示补丁，补丁本身不应直接交付。 |
+| SWE-bench Lite dev 单例 | `sqlfluff__sqlfluff-2419`，baseline，V4-Pro，25 步/900 秒/50 万累计 Token 上限。实际 25 步、212,735 Token、240.68 秒；修改 `src/sqlfluff/rules/L060.py`，`git diff --check` 通过，独立重跑 L060 现有测试为 3 通过、725 未选。 | 状态为 `terminated/max_steps`，没有 finish，也没有官方容器 evaluator；**不计为 resolved**。单例只用于诊断，不能推出 23 题修复率。 |
+
+两处统计陷阱：同一 Web 工作区第一轮留下未提交文件，后续只读回合的 `model_patch` 仍是同一份 diff，因此这些回合的非空 patch 不能算新修复；finish 门禁通过也只说明通过了当时配置的检查，不说明需求语义正确。真实运行可用 `python scripts/evaluate_runs.py <runs目录>` 重算过程指标，SWE-bench `resolved` 仍须由官方 harness 给出。下一步应在干净隔离仓库中为 Web 任务加入命令级验收，再固定预算扩大样本；本机缺少 Docker，尚未完成官方判题。

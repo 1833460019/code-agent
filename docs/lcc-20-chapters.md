@@ -44,4 +44,4 @@
 
 可以据实描述：实现可组合的 Coding Agent Runtime，覆盖权限与 Hooks、上下文压缩、持久任务 DAG、独立子 Agent/团队、Worktree 隔离及 MCP 接入；统一 CLI/Web/评测入口，并通过真实本地进程与 Git 的离线集成测试。
 
-不要写“达到某个 SWE-bench 修复率”“完整商业级沙箱”“分布式生产多 Agent 平台”。这些需要真实评测或额外工程证据。本次交付未进行付费真实模型评测、官方容器验收或 23-task 批量 resolved-rate 实验。
+不要写“达到某个 SWE-bench 修复率”“完整商业级沙箱”“分布式生产多 Agent 平台”。这些需要真实评测或额外工程证据。2026-09-24 已进行有限的付费真实模型与单例 SWE-bench 诊断（结果见 README），但仍未进行官方容器验收或 23-task 批量 resolved-rate 实验。
